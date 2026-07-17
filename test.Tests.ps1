@@ -59,6 +59,10 @@ Describe "test.ps1" {
         Get-BranchCoverage -Output @("Condition coverage: 9/10 (90.0%)") | Should -Be 90
     }
 
+    It "BranchCoverage_WithoutConditions_IsFull" {
+        Get-BranchCoverage -Output @("Condition coverage: 0/0") | Should -Be 100
+    }
+
     It "BranchCoverage_WithoutRatio_IsZero" {
         Get-BranchCoverage -Output @("no output") | Should -Be 0
     }
