@@ -37,11 +37,20 @@ func TestCodecFamily(t *testing.T) {
 		codec    Codec
 		expected AudioFamily
 	}{
-		{"flac", FamilyLossless}, {"alac", FamilyLossless}, {"ape", FamilyLossless},
-		{"wavpack", FamilyLossless}, {"tta", FamilyLossless}, {"truehd", FamilyLossless},
-		{"mlp", FamilyLossless}, {"pcm_s24le", FamilyLossless}, {"pcm_s16le", FamilyLossless},
-		{"aac", FamilyAAC}, {"mp3", FamilyLossyOther}, {"opus", FamilyLossyOther},
-		{"vorbis", FamilyLossyOther}, {"unknown", FamilyLossyOther},
+		{"flac", FamilyLossless},
+		{"alac", FamilyLossless},
+		{"ape", FamilyLossless},
+		{"wavpack", FamilyLossless},
+		{"tta", FamilyLossless},
+		{"truehd", FamilyLossless},
+		{"mlp", FamilyLossless},
+		{"pcm_s24le", FamilyLossless},
+		{"pcm_s16le", FamilyLossless},
+		{"aac", FamilyAAC},
+		{"mp3", FamilyLossyOther},
+		{"opus", FamilyLossyOther},
+		{"vorbis", FamilyLossyOther},
+		{"unknown", FamilyLossyOther},
 	}
 	for _, testCase := range cases {
 		t.Run(string(testCase.codec), func(t *testing.T) {

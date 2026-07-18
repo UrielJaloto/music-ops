@@ -2,9 +2,8 @@ package domain
 
 import (
 	"errors"
-	"testing"
-
 	"slices"
+	"testing"
 )
 
 func TestNewTitle(t *testing.T) {

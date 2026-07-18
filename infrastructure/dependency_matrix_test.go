@@ -56,7 +56,7 @@ var allowedDomainContextDependencies = map[string][]string{
 
 func TestLayerDependencies_AreLowerTriangular(t *testing.T) {
 	loaded := loadModulePackages(t)
-	var edges []dependencyEdge
+	edges := make([]dependencyEdge, 0, len(loaded))
 	for _, loadedPackage := range loaded {
 		edges = append(edges, layerEdges(t, loadedPackage)...)
 	}
@@ -68,7 +68,7 @@ func TestLayerDependencies_AreLowerTriangular(t *testing.T) {
 
 func TestDomainContextDependencies_FollowDeclaredOrder(t *testing.T) {
 	domainPackage := findLoadedPackage(t, loadModulePackages(t), "domain")
-	edges := crossFileEdges(domainPackage, func(object types.Object) bool { return true })
+	edges := crossFileEdges(domainPackage, func(types.Object) bool { return true })
 	contextEdges := make([]dependencyEdge, 0, len(edges))
 	for _, edge := range edges {
 		contextEdges = append(contextEdges, dependencyEdge{from: domainContext(t, edge.from), to: domainContext(t, edge.to)})
@@ -197,7 +197,7 @@ func isStandardLibrary(importPath string) bool {
 }
 
 func crossFileEdges(loadedPackage *packages.Package, isRelevant func(types.Object) bool) []dependencyEdge {
-	var edges []dependencyEdge
+	edges := make([]dependencyEdge, 0, len(loadedPackage.Syntax))
 	for _, file := range loadedPackage.Syntax {
 		fromFile := filepath.Base(loadedPackage.Fset.Position(file.Pos()).Filename)
 		edges = append(edges, fileEdges(loadedPackage, file, fromFile, isRelevant)...)

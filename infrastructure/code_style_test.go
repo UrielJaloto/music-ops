@@ -13,7 +13,7 @@ import (
 var allowedDirectivePrefixes = []string{"//go:build", "//go:embed", "//go:generate"}
 
 func TestSourceFiles_HaveNoComments(t *testing.T) {
-	root := filepath.Join("..")
+	root := ".."
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
