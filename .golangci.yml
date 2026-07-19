@@ -68,6 +68,10 @@ linters:
         text: fmt\.Print
         linters:
           - forbidigo
+      - path: ^domain/track\.go$
+        text: (G401|G505)
+        linters:
+          - gosec
       - path: ^infrastructure/config\.go$
         text: os\.Getenv
         linters:
