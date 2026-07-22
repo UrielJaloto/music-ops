@@ -23,6 +23,7 @@ var (
 	bracketedFeaturingPattern = regexp.MustCompile(`(?i)[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s+([^)\]]+)[)\]]`)
 	trailingFeaturingPattern  = regexp.MustCompile(`(?i)\s+-?\s*(?:feat\.?|ft\.?|featuring)\s+(.+)$`)
 	guestSeparatorPattern     = regexp.MustCompile(`(?i)\s*[,&]\s*|\s+(?:and|e|x)\s+`)
+	leadingFeaturingPattern   = regexp.MustCompile(`(?i)^(?:(?:feat\.?|ft\.?|featuring)(?:\s+|$))+`)
 	emptyBracketsPattern      = regexp.MustCompile(`\(\s*\)|\[\s*\]`)
 )
 
@@ -72,7 +73,7 @@ func removeTrailingFeaturing(value string) (string, []string) {
 func splitGuests(list string) []string {
 	guests := []string{}
 	for _, part := range guestSeparatorPattern.Split(list, -1) {
-		guest := collapseWhitespace(part)
+		guest := collapseWhitespace(leadingFeaturingPattern.ReplaceAllString(strings.TrimSpace(part), ""))
 		if guest == "" {
 			continue
 		}
