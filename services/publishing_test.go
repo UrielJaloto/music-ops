@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -294,6 +295,39 @@ func TestPublishingService_Admit(t *testing.T) {
 			}
 			if !slices.Equal(admitted.Publishable, testCase.expectedPublishable) || !slices.Equal(admitted.Duplicates, testCase.expectedDuplicates) {
 				t.Fatalf("admitted = %+v", admitted)
+			}
+		})
+	}
+}
+
+func TestPublishingService_FindPublished(t *testing.T) {
+	cases := []struct {
+		name          string
+		published     map[domain.TrackID]string
+		existing      map[string]bool
+		readErr       error
+		expected      map[domain.TrackID]string
+		expectedError error
+	}{
+		{name: "PublishedAndPresent_IsFound", published: map[domain.TrackID]string{"a": "A.m4a"}, existing: map[string]bool{"out/A.m4a": true}, expected: map[domain.TrackID]string{"a": "A.m4a"}},
+		{name: "PublishedButMissing_IsNotFound", published: map[domain.TrackID]string{"a": "A.m4a"}, existing: map[string]bool{}, expected: map[domain.TrackID]string{}},
+		{name: "NotPublished_IsNotFound", published: map[domain.TrackID]string{}, existing: map[string]bool{"out/A.m4a": true}, expected: map[domain.TrackID]string{}},
+		{name: "JournalError_ReturnsWrappedError", readErr: errTechnical, expectedError: errTechnical},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			doubles := newPublishingDoubles()
+			doubles.journal.published = testCase.published
+			doubles.journal.readErr = testCase.readErr
+			doubles.mover.existing = testCase.existing
+
+			found, err := doubles.service(libraryReaderStub{}).FindPublished(context.Background(), FindPublishedInput{Output: "out", IDs: []domain.TrackID{"a"}})
+
+			if !errors.Is(err, testCase.expectedError) {
+				t.Fatalf("error = %v", err)
+			}
+			if err == nil && fmt.Sprint(found.Targets) != fmt.Sprint(testCase.expected) {
+				t.Fatalf("targets = %v", found.Targets)
 			}
 		})
 	}
