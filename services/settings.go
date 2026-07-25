@@ -11,6 +11,7 @@ import (
 var (
 	ErrSettingUnknown    = errors.New("setting key is unknown")
 	ErrSettingKeyMissing = errors.New("setting key is missing")
+	ErrSettingInvalid    = errors.New("setting value is invalid")
 )
 
 const (
