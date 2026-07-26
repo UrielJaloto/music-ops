@@ -21,6 +21,10 @@ func (SystemClock) Now() time.Time {
 	return time.Now()
 }
 
+func (SystemClock) After(duration time.Duration) <-chan time.Time {
+	return time.After(duration)
+}
+
 type RandomRunIDs struct{}
 
 func NewRandomRunIDs() RandomRunIDs {
