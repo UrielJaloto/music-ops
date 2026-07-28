@@ -72,6 +72,14 @@ linters:
         text: (G401|G505)
         linters:
           - gosec
+      - path: ^infrastructure/process_runner(_test)?\.go$
+        text: G204
+        linters:
+          - gosec
+      - path: ^infrastructure/fdk_library_windows\.go$
+        text: G103
+        linters:
+          - gosec
       - path: ^infrastructure/config\.go$
         text: os\.Getenv
         linters:
