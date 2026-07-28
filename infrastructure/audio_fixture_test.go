@@ -125,7 +125,7 @@ func generateFixture(t *testing.T, ffmpeg string, fixture audioFixture, path str
 	t.Helper()
 	temporary := path + ".partial" + filepath.Ext(path)
 	arguments := fixtureArguments(t, ffmpeg, fixture, temporary)
-	if output, err := exec.Command(ffmpeg, arguments...).CombinedOutput(); err != nil {
+	if output, err := exec.CommandContext(context.Background(), ffmpeg, arguments...).CombinedOutput(); err != nil {
 		t.Fatalf("generating fixture %s: %v\n%s", fixture.relativePath, err, output)
 	}
 	if fixture.isCorrupt {
@@ -201,7 +201,7 @@ func fixtureCover(t *testing.T, ffmpeg string) string {
 	}
 	temporary := path + ".partial.png"
 	arguments := []string{"-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=" + fixtureCoverSize, "-frames:v", "1", temporary}
-	if output, err := exec.Command(ffmpeg, arguments...).CombinedOutput(); err != nil {
+	if output, err := exec.CommandContext(context.Background(), ffmpeg, arguments...).CombinedOutput(); err != nil {
 		t.Fatalf("generating cover: %v\n%s", err, output)
 	}
 	if err := os.Rename(temporary, path); err != nil {
@@ -248,9 +248,10 @@ type probedStream struct {
 type probedFile struct {
 	Streams []probedStream `json:"streams"`
 	Format  struct {
-		Tags     map[string]string `json:"tags"`
-		Duration string            `json:"duration"`
-		BitRate  string            `json:"bit_rate"`
+		Tags      map[string]string `json:"tags"`
+		Duration  string            `json:"duration"`
+		StartTime string            `json:"start_time"`
+		BitRate   string            `json:"bit_rate"`
 	} `json:"format"`
 }
 

@@ -32,7 +32,7 @@ func (stub *ffprobeRunnerStub) Run(_ context.Context, request ProcessRequest) (P
 
 func ffprobeFixture(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("testdata", "ffprobe", name))
+	data, err := os.ReadFile(filepath.Clean(filepath.Join("testdata", "ffprobe", name)))
 	if err != nil {
 		t.Fatal(err)
 	}

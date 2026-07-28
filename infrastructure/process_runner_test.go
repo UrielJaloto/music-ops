@@ -28,7 +28,7 @@ func runWithProcessHelper(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(folder) }()
 	processHelperPath = filepath.Join(folder, "processhelper.exe")
-	build := exec.Command("go", "build", "-o", processHelperPath, "./testdata/processhelper")
+	build := exec.CommandContext(context.Background(), "go", "build", "-o", processHelperPath, "./testdata/processhelper")
 	if output, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintln(os.Stderr, string(output), err)
 		return 1
