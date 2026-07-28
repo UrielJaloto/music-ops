@@ -1,0 +1,6 @@
+{
+  "streams": [
+    {"index": 0, "codec_name": "pcm_s16le", "codec_type": "audio", "sample_fmt": "s16", "sample_rate": "44100", "channels": 1, "bits_per_sample": 16, "bit_rate": "705600", "duration": "1.000000", "disposition": {"attached_pic": 0}}
+  ],
+  "format": {"duration": "1.000000", "bit_rate": "705644"}
+}
