@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const pcmSampleBytes = 2
+
 var ErrFDKUnavailable = errors.New("FDK-AAC library is unavailable")
 
 type FDKSettings struct {

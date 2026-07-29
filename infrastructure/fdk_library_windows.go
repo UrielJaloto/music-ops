@@ -35,7 +35,6 @@ const (
 	aacVersionStringSize             = 32
 	aacLibraryInfoEntries            = 64
 	aacModuleEncoder                 = 4
-	pcmSampleBytes                   = 2
 	aacOutputBufferBytes             = 20480
 	aacFlushSamples                  = -1
 	aacEncoderInvalidConfig          = 0x23
