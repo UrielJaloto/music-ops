@@ -14,7 +14,10 @@ import (
 	"time"
 )
 
-var processHelperPath string
+var (
+	processHelperPath   string
+	fakeLlamaServerPath string
+)
 
 func TestMain(m *testing.M) {
 	os.Exit(runWithProcessHelper(m))
@@ -28,12 +31,22 @@ func runWithProcessHelper(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(folder) }()
 	processHelperPath = filepath.Join(folder, "processhelper.exe")
-	build := exec.CommandContext(context.Background(), "go", "build", "-o", processHelperPath, "./testdata/processhelper")
-	if output, err := build.CombinedOutput(); err != nil {
-		fmt.Fprintln(os.Stderr, string(output), err)
-		return 1
+	fakeLlamaServerPath = filepath.Join(folder, "llama-server.exe")
+	for output, source := range map[string]string{processHelperPath: "./testdata/processhelper", fakeLlamaServerPath: "./testdata/fakellama"} {
+		if err := buildHelper(output, source); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 	}
 	return m.Run()
+}
+
+func buildHelper(output, source string) error {
+	build := exec.CommandContext(context.Background(), "go", "build", "-o", output, source)
+	if combined, err := build.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, combined)
+	}
+	return nil
 }
 
 func TestProcessRunner_Run_ExitCodes(t *testing.T) {
