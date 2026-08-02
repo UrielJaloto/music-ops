@@ -73,8 +73,9 @@ func userItems(t *testing.T, request chatRequest) []map[string]any {
 
 func echoCredits(t *testing.T) func(request chatRequest, call int) llamaReply {
 	return func(request chatRequest, _ int) llamaReply {
-		items := []map[string]any{}
-		for _, item := range userItems(t, request) {
+		requested := userItems(t, request)
+		items := make([]map[string]any, 0, len(requested))
+		for _, item := range requested {
 			items = append(items, map[string]any{"key": item["key"], "title": "Clean " + item["title"].(string), "artists": []string{item["artist"].(string)}})
 		}
 		content, _ := json.Marshal(map[string]any{"items": items})

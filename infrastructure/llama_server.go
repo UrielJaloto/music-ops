@@ -73,7 +73,7 @@ func (server LlamaServer) Start(ctx context.Context) (LlamaServerSession, error)
 	}()
 	session := LlamaServerSession{stop: stopChild(cancel, child)}
 	if err := server.waitUntilHealthy(ctx, child); err != nil {
-		return LlamaServerSession{}, errors.Join(err, session.Stop(context.Background()))
+		return LlamaServerSession{}, errors.Join(err, session.Stop(context.WithoutCancel(ctx)))
 	}
 	return session, nil
 }
