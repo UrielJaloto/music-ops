@@ -139,7 +139,7 @@ func TestLlamaServer_MissingFiles(t *testing.T) {
 
 			_, err := server.Start(context.Background())
 
-			if !errors.Is(err, ErrLocalAdvisorNotInstalled) {
+			if !errors.Is(err, services.ErrLocalAdvisorNotInstalled) {
 				t.Fatalf("err = %v", err)
 			}
 		})
@@ -212,14 +212,14 @@ func TestLazyLlamaAdvisor_StartsOnceAndStopsOnClose(t *testing.T) {
 }
 
 func TestLazyLlamaAdvisor_StartFailure(t *testing.T) {
-	server := &advisorServerSpy{err: ErrLocalAdvisorNotInstalled}
+	server := &advisorServerSpy{err: services.ErrLocalAdvisorNotInstalled}
 	inner := &localAdvisorStub{}
 	advisor := NewLazyLlamaAdvisor(inner, server)
 
 	_, creditErr := advisor.SuggestCredits(context.Background(), nil)
 	_, genreErr := advisor.SuggestGenres(context.Background(), nil)
 
-	if !errors.Is(creditErr, ErrLocalAdvisorNotInstalled) || !errors.Is(genreErr, ErrLocalAdvisorNotInstalled) || inner.calls != 0 || server.starts != 2 {
+	if !errors.Is(creditErr, services.ErrLocalAdvisorNotInstalled) || !errors.Is(genreErr, services.ErrLocalAdvisorNotInstalled) || inner.calls != 0 || server.starts != 2 {
 		t.Fatalf("errors = %v %v calls = %d starts = %d", creditErr, genreErr, inner.calls, server.starts)
 	}
 }

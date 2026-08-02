@@ -6,7 +6,11 @@ import (
 	"fmt"
 )
 
-var ErrFFmpegMissing = errors.New("ffmpeg was not found; install it with: winget install -e --id Gyan.FFmpeg")
+var (
+	ErrFFmpegMissing            = errors.New("ffmpeg was not found; install it with: winget install -e --id Gyan.FFmpeg")
+	ErrLocalAdvisorNotInstalled = errors.New("local advisor is not installed; run: music-ops advisor install")
+	ErrLastFMKeyInvalid         = errors.New("last.fm api key is invalid")
+)
 
 const (
 	MinimumFreeBytes   uint64 = 2 << 30

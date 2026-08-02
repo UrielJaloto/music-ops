@@ -22,7 +22,6 @@ const (
 )
 
 var (
-	ErrLocalAdvisorNotInstalled = errors.New("local advisor is not installed; run: music-ops advisor install")
 	ErrLocalAdvisorStartTimeout = errors.New("local advisor did not become ready in time")
 )
 
@@ -63,7 +62,7 @@ func (server LlamaServer) Start(ctx context.Context) (LlamaServerSession, error)
 		return LlamaServerSession{}, nil
 	}
 	if !isFile(server.settings.Executable) || !isFile(server.settings.ModelFile) {
-		return LlamaServerSession{}, ErrLocalAdvisorNotInstalled
+		return LlamaServerSession{}, services.ErrLocalAdvisorNotInstalled
 	}
 	processContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	child := &childProcess{done: make(chan struct{})}
