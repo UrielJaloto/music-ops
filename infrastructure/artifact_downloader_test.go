@@ -81,7 +81,7 @@ func TestHTTPArtifactDownloader_FreshDownload(t *testing.T) {
 
 	err := NewHTTPArtifactDownloader(client, progress).Download(context.Background(), artifact, destination)
 
-	stored, readErr := os.ReadFile(filepath.FromSlash(destination))
+	stored, readErr := os.ReadFile(filepath.Clean(filepath.FromSlash(destination)))
 	if err != nil || readErr != nil || !bytes.Equal(stored, content) || progress.last() != int64(len(content)) || isFile(filepath.FromSlash(destination)+".part") {
 		t.Fatalf("err = %v progress = %v", err, progress.done)
 	}
@@ -105,7 +105,7 @@ func TestHTTPArtifactDownloader_ResumesPartialDownload(t *testing.T) {
 
 			err := NewHTTPArtifactDownloader(client, &progressSpy{}).Download(context.Background(), artifact, destination)
 
-			stored, _ := os.ReadFile(destination)
+			stored, _ := os.ReadFile(filepath.Clean(destination))
 			if err != nil || !bytes.Equal(stored, content) || server.ranges[0] != "bytes=3000-" {
 				t.Fatalf("err = %v ranges = %v size = %d", err, server.ranges, len(stored))
 			}
@@ -172,7 +172,7 @@ func TestHTTPArtifactDownloader_ServerErrors(t *testing.T) {
 func writeZip(t *testing.T, entries map[string]string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "archive.zip")
-	file, err := os.Create(path)
+	file, err := os.Create(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,8 +199,8 @@ func TestZipExtractor_NestedFolders(t *testing.T) {
 
 	err := NewZipExtractor().Extract(context.Background(), filepath.ToSlash(archive), filepath.ToSlash(destination))
 
-	server, _ := os.ReadFile(filepath.Join(destination, "llama-server.exe"))
-	library, _ := os.ReadFile(filepath.Join(destination, "lib", "cuda", "cudart.dll"))
+	server, _ := os.ReadFile(filepath.Clean(filepath.Join(destination, "llama-server.exe")))
+	library, _ := os.ReadFile(filepath.Clean(filepath.Join(destination, "lib", "cuda", "cudart.dll")))
 	if err != nil || string(server) != "exe" || string(library) != "dll" || !pathExists(filepath.Join(destination, "docs")) {
 		t.Fatalf("err = %v", err)
 	}

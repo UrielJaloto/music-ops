@@ -21,7 +21,7 @@ type scriptedAdvisor struct {
 }
 
 func (advisor *scriptedAdvisor) SuggestCredits(_ context.Context, requests []services.CreditRequest) ([]services.CreditSuggestion, error) {
-	keys := []string{}
+	keys := make([]string, 0, len(requests))
 	answers := []services.CreditSuggestion{}
 	for _, request := range requests {
 		keys = append(keys, request.Key)
@@ -34,7 +34,7 @@ func (advisor *scriptedAdvisor) SuggestCredits(_ context.Context, requests []ser
 }
 
 func (advisor *scriptedAdvisor) SuggestGenres(_ context.Context, requests []services.GenreRequest) ([]services.GenreSuggestion, error) {
-	keys := []string{}
+	keys := make([]string, 0, len(requests))
 	answers := []services.GenreSuggestion{}
 	for _, request := range requests {
 		keys = append(keys, request.Key)

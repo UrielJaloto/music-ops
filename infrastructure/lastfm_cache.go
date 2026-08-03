@@ -37,12 +37,12 @@ func NewLastFMCache(inner TagSource, cache ByteCache) LastFMCache {
 }
 
 func (decorator LastFMCache) FetchTrackTags(ctx context.Context, artist, title string) ([]string, error) {
-	key := cacheKey(lastFMCacheTrackKey, artist, title)
+	key := buildCacheKey(lastFMCacheTrackKey, artist, title)
 	return decorator.readCached(ctx, key, func() ([]string, error) { return decorator.inner.FetchTrackTags(ctx, artist, title) })
 }
 
 func (decorator LastFMCache) FetchArtistTags(ctx context.Context, artist string) ([]string, error) {
-	key := cacheKey(lastFMCacheArtist, artist)
+	key := buildCacheKey(lastFMCacheArtist, artist)
 	return decorator.readCached(ctx, key, func() ([]string, error) { return decorator.inner.FetchArtistTags(ctx, artist) })
 }
 
@@ -81,7 +81,7 @@ func decodeCachedTags(stored []byte) ([]string, error) {
 	return tags, nil
 }
 
-func cacheKey(parts ...string) string {
+func buildCacheKey(parts ...string) string {
 	folded := make([]string, 0, len(parts))
 	for _, part := range parts {
 		folded = append(folded, strings.ToLower(strings.TrimSpace(part)))
