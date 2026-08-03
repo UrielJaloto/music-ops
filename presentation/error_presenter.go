@@ -22,6 +22,7 @@ type errorMessage struct {
 
 var errorMessages = []errorMessage{
 	{target: context.Canceled, message: "cancelled", code: exitCancelled},
+	{target: services.ErrFolderChoiceCancelled, message: "no folder selected", code: exitSuccess},
 	{target: services.ErrFolderMissing, message: "the folder is missing or does not exist", code: exitFailure},
 	{target: services.ErrOutputInsideInput, message: "the output folder must not be inside the input folder", code: exitFailure},
 	{target: services.ErrSettingUnknown, message: "unknown setting; run: music-ops config show", code: exitFailure},
@@ -44,7 +45,10 @@ func NewErrorPresenter(output io.Writer) ErrorPresenter {
 
 func (presenter ErrorPresenter) Present(err error) int {
 	message, code := describeError(err)
-	if _, writeErr := fmt.Fprintf(presenter.output, "error: %s\n", message); writeErr != nil {
+	if code != exitSuccess {
+		message = "error: " + message
+	}
+	if _, writeErr := fmt.Fprintln(presenter.output, message); writeErr != nil {
 		return exitFailure
 	}
 	return code
