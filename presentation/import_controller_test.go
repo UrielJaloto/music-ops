@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -59,7 +58,19 @@ func testDefaults() ImportDefaults {
 	return ImportDefaults{Output: "E:/Music", Profile: domain.NewEncodingProfile(domain.EngineFDK), Numbering: domain.NumberingPerDirectory, Layout: domain.LayoutFlat, AlbumTemplate: "{album}"}
 }
 
+type reporterStub struct {
+	path  string
+	err   error
+	calls int
+}
+
+func (stub *reporterStub) Present(context.Context, services.ImportOutput) (string, error) {
+	stub.calls++
+	return stub.path, stub.err
+}
+
 type controllerFixture struct {
+	reporter *reporterStub
 	service  *importServiceSpy
 	chooser  *chooserStub
 	finisher *finisherSpy
@@ -68,13 +79,14 @@ type controllerFixture struct {
 
 func newImportFixture(opensFiles bool) (ImportController, controllerFixture) {
 	fixture := controllerFixture{
+		reporter: &reporterStub{path: "E:/Music/.music-ops/runs/r1/report.md"},
 		service:  &importServiceSpy{output: services.ImportOutput{RunID: "r1", Output: "E:/Music", ExitStatus: 2}},
 		chooser:  &chooserStub{folder: "D:/Chosen"},
 		finisher: &finisherSpy{},
 		output:   &bytes.Buffer{},
 	}
 	presenter := NewImportPresenter(fixture.output, NewErrorPresenter(fixture.output))
-	controller := NewImportController(ImportServices{Importer: fixture.service, Previewer: fixture.service}, ImportDesktop{Chooser: fixture.chooser, Finisher: fixture.finisher}, presenter, ImportSettings{Defaults: testDefaults(), OpensFiles: opensFiles})
+	controller := NewImportController(ImportServices{Importer: fixture.service, Previewer: fixture.service, Reporter: fixture.reporter}, ImportDesktop{Chooser: fixture.chooser, Finisher: fixture.finisher}, presenter, ImportSettings{Defaults: testDefaults(), OpensFiles: opensFiles})
 	return controller, fixture
 }
 
@@ -87,7 +99,7 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 	if diff := cmp.Diff([]services.ImportInput{expected}, fixture.service.importInputs, cmp.AllowUnexported(domain.EncodingProfile{})); diff != "" {
 		t.Fatalf("input (-want +got):\n%s", diff)
 	}
-	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || !strings.Contains(fixture.output.String(), "Run r1 finished") {
+	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: E:/Music/.music-ops/runs/r1/report.md") {
 		t.Fatalf("code = %d chooser = %d finisher = %d output = %q", code, fixture.chooser.calls, fixture.finisher.calls, fixture.output.String())
 	}
 }
@@ -145,6 +157,19 @@ func TestImportController_Run_FinisherFailureIsAWarning(t *testing.T) {
 	}
 }
 
+func TestImportController_Run_ReportFailure(t *testing.T) {
+	controller, fixture := newImportFixture(false)
+	fixture.reporter = &reporterStub{err: errors.New("disk full")}
+	controller.services.Reporter = fixture.reporter
+
+	code := controller.Run(context.Background(), []string{"D:/In"})
+
+	output := fixture.output.String()
+	if code != 2 || !strings.HasPrefix(output, "warning: could not write the report: disk full\n") || !strings.Contains(output, "Report: not written") {
+		t.Fatalf("code = %d output = %q", code, output)
+	}
+}
+
 func TestImportController_Preview(t *testing.T) {
 	controller, fixture := newImportFixture(true)
 	fixture.service.preview = services.ImportPreviewOutput{Rows: []services.ImportRow{
@@ -181,9 +206,9 @@ func TestImportPresenter_SummaryGolden(t *testing.T) {
 		Warnings: []string{"a", "b", "c", "d"},
 	}
 
-	NewImportPresenter(&output, NewErrorPresenter(&output)).Imported(result)
+	NewImportPresenter(&output, NewErrorPresenter(&output)).Imported(result, "E:/Music/.music-ops/runs/20261016-083005-abcd/report.md")
 
-	if output.String() != strings.ReplaceAll(readGolden(t, "summary.golden"), "/", string(filepath.Separator)) {
+	if output.String() != readGolden(t, "summary.golden") {
 		t.Fatalf("summary:\n%s", output.String())
 	}
 }

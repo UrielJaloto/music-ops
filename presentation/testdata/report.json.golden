@@ -1,0 +1,72 @@
+{
+  "run_id": "20261016-083005-abcd",
+  "input": "D:/Downloads/Album",
+  "output": "E:/Music",
+  "duration": "1m35s",
+  "exit_status": 2,
+  "counts": {
+    "published": 2,
+    "duplicate": 1,
+    "skipped": 1,
+    "failed": 1,
+    "total": 5
+  },
+  "timings": [
+    {
+      "stage": "discover",
+      "duration": "1.2s"
+    },
+    {
+      "stage": "convert",
+      "duration": "1m1s"
+    }
+  ],
+  "warnings": [
+    "no advisor available | rules only"
+  ],
+  "tracks": [
+    {
+      "source": "bad.flac",
+      "target": "Bad - Track.m4a",
+      "title": "A | B",
+      "artist": "Bad",
+      "genre": "",
+      "status": "failed",
+      "error": "decode error\nffmpeg exited"
+    },
+    {
+      "source": "notes.txt",
+      "target": "",
+      "title": "",
+      "artist": "",
+      "genre": "",
+      "status": "skipped",
+      "error": "not an audio file"
+    },
+    {
+      "source": "a.flac",
+      "target": "Alpha - Hit.m4a",
+      "title": "Hit",
+      "artist": "Alpha; Guest",
+      "genre": "Pop",
+      "status": "published"
+    },
+    {
+      "source": "c.flac",
+      "target": "Alpha - Hit.m4a",
+      "title": "Hit",
+      "artist": "Alpha",
+      "genre": "Pop",
+      "status": "duplicate",
+      "error": "kept a.flac"
+    },
+    {
+      "source": "b.flac",
+      "target": "Zeta - Song.m4a",
+      "title": "Song",
+      "artist": "Zeta",
+      "genre": "Rock",
+      "status": "published"
+    }
+  ]
+}

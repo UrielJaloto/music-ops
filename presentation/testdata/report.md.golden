@@ -1,0 +1,37 @@
+# music-ops report 20261016-083005-abcd
+
+- Input: `D:/Downloads/Album`
+- Output: `E:/Music`
+- Duration: 1m35s
+- Exit status: 2
+
+## Counts
+
+| Status | Tracks |
+|---|---|
+| ✅ published | 2 |
+| ♻️ duplicate | 1 |
+| ⏭️ skipped | 1 |
+| ❌ failed | 1 |
+| total | 5 |
+
+## Stage timings
+
+| Stage | Duration |
+|---|---|
+| discover | 1.2s |
+| convert | 1m1s |
+
+## Warnings
+
+- no advisor available \| rules only
+
+## Tracks
+
+| | Source | Target | Title | Artist | Genre | Status | Error |
+|---|---|---|---|---|---|---|---|
+| ❌ | bad.flac | Bad - Track.m4a | A \| B | Bad |  | failed | decode error ffmpeg exited |
+| ⏭️ | notes.txt |  |  |  |  | skipped | not an audio file |
+| ✅ | a.flac | Alpha - Hit.m4a | Hit | Alpha; Guest | Pop | published |  |
+| ♻️ | c.flac | Alpha - Hit.m4a | Hit | Alpha | Pop | duplicate | kept a.flac |
+| ✅ | b.flac | Zeta - Song.m4a | Song | Zeta | Rock | published |  |

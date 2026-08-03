@@ -1,0 +1,30 @@
+# music-ops report empty
+
+- Input: ``
+- Output: ``
+- Duration: 0s
+- Exit status: 0
+
+## Counts
+
+| Status | Tracks |
+|---|---|
+| ✅ published | 0 |
+| ♻️ duplicate | 0 |
+| ⏭️ skipped | 0 |
+| ❌ failed | 0 |
+| total | 0 |
+
+## Stage timings
+
+| Stage | Duration |
+|---|---|
+
+## Warnings
+
+None.
+
+## Tracks
+
+| | Source | Target | Title | Artist | Genre | Status | Error |
+|---|---|---|---|---|---|---|---|
