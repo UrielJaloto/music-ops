@@ -76,7 +76,7 @@ linters:
         text: G204
         linters:
           - gosec
-      - path: ^infrastructure/fdk_library_windows\.go$
+      - path: ^infrastructure/(fdk_library|folder_picker)_windows\.go$
         text: G103
         linters:
           - gosec
