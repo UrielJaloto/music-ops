@@ -54,7 +54,7 @@ func (presenter ImportPresenter) Previewed(output services.ImportPreviewOutput) 
 		_, _ = fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\n", row.Source, row.Target, row.Title, row.Artist, row.Genre, row.Status)
 	}
 	_ = writer.Flush()
-	table.WriteString(fmt.Sprintf("%d tracks planned, %d warnings\n", len(output.Rows), len(output.Warnings)))
+	_, _ = fmt.Fprintf(&table, "%d tracks planned, %d warnings\n", len(output.Rows), len(output.Warnings))
 	presenter.write(table.String())
 }
 

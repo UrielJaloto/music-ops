@@ -21,9 +21,7 @@ const (
 	llamaStopWait       = 10 * time.Second
 )
 
-var (
-	ErrLocalAdvisorStartTimeout = errors.New("local advisor did not become ready in time")
-)
+var ErrLocalAdvisorStartTimeout = errors.New("local advisor did not become ready in time")
 
 type LlamaServerSettings struct {
 	Executable string
