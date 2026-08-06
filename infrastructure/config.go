@@ -41,6 +41,8 @@ const (
 	maximumPort          = 65535
 	minimumBatch         = 1
 	maximumBatch         = 200
+	appDataVariable      = "APPDATA"
+	localAppDataVariable = "LOCALAPPDATA"
 )
 
 var configKeys = []string{
@@ -143,6 +145,17 @@ func (store ConfigStore) Load(ctx context.Context, overrides map[string]string) 
 		return Config{}, err
 	}
 	return toConfig(values)
+}
+
+type EnvironmentPaths struct {
+	AppData      string
+	LocalAppData string
+}
+
+func ReadEnvironmentPaths(environment func(string) (string, bool)) EnvironmentPaths {
+	appData, _ := environment(appDataVariable)
+	localAppData, _ := environment(localAppDataVariable)
+	return EnvironmentPaths{AppData: appData, LocalAppData: localAppData}
 }
 
 func (store ConfigStore) Values(ctx context.Context) (map[string]string, error) {

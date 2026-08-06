@@ -12,7 +12,7 @@ commands:
   advisor install              download the local advisor runtime and model
   version                      print the version
 
-flags (run, preview, watch):
+flags (every command except config):
   --out <dir>                  output folder (output.dir)
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable

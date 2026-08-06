@@ -133,6 +133,16 @@ func TestParseCommandLine_Flags(t *testing.T) {
 			expected:  RouterRequest{Command: "watch", Arguments: []string{}, Overrides: map[string]string{}, IsVerbose: true},
 		},
 		{
+			name:      "LeadingFlagsMeanRun",
+			arguments: []string{"--out", "E:/Music", "D:/In"},
+			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{"output.dir": "E:/Music"}, OpensFiles: true},
+		},
+		{
+			name:      "DoctorAcceptsFlags",
+			arguments: []string{"doctor", "--out", "E:/Music"},
+			expected:  RouterRequest{Command: "doctor", Arguments: []string{}, Overrides: map[string]string{"output.dir": "E:/Music"}, OpensFiles: true},
+		},
+		{
 			name:      "ConfigKeepsRawArguments",
 			arguments: []string{"config", "set", "output.dir", "--weird"},
 			expected:  RouterRequest{Command: "config", Arguments: []string{"set", "output.dir", "--weird"}, Overrides: map[string]string{}, OpensFiles: true},

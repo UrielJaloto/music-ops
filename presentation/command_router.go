@@ -29,7 +29,7 @@ var ErrCommandLineInvalid = errors.New("command line is invalid")
 
 var helpArguments = map[string]bool{commandHelp: true, "-h": true, "--help": true}
 
-var commandsWithFlags = map[string]bool{CommandRun: true, CommandPreview: true, CommandWatch: true}
+var commandsWithRawArguments = map[string]bool{CommandConfig: true}
 
 const usageText = `usage: music-ops <command> [arguments] [flags]
 
@@ -45,7 +45,7 @@ commands:
   advisor install              download the local advisor runtime and model
   version                      print the version
 
-flags (run, preview, watch):
+flags (every command except config):
   --out <dir>                  output folder (output.dir)
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable
@@ -67,15 +67,19 @@ type RouterRequest struct {
 
 func ParseCommandLine(arguments []string) (RouterRequest, error) {
 	request := RouterRequest{Command: CommandRun, Arguments: []string{}, Overrides: map[string]string{}, OpensFiles: true}
-	if len(arguments) > 0 {
+	if len(arguments) > 0 && startsWithCommand(arguments[0]) {
 		request.Command = arguments[0]
 		arguments = arguments[1:]
 	}
-	if !commandsWithFlags[request.Command] {
+	if commandsWithRawArguments[request.Command] || helpArguments[request.Command] {
 		request.Arguments = append(request.Arguments, arguments...)
 		return request, nil
 	}
 	return parseCommandFlags(request, arguments)
+}
+
+func startsWithCommand(argument string) bool {
+	return helpArguments[argument] || !strings.HasPrefix(argument, "-")
 }
 
 func parseCommandFlags(request RouterRequest, arguments []string) (RouterRequest, error) {
