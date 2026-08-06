@@ -104,7 +104,7 @@ func TestReportPresenter_EscapesPipesAndNewlines(t *testing.T) {
 func TestReportPresenter_FailedFirstThenByTarget(t *testing.T) {
 	tracks := toReportTracks(sampleImportOutput().Rows)
 
-	order := []string{}
+	order := make([]string, 0, len(tracks))
 	for _, track := range tracks {
 		order = append(order, track.Status+":"+track.Target)
 	}
