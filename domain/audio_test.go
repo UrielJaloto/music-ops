@@ -196,3 +196,9 @@ func TestDecideEncoding(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodingProfile_HasConstantBitrate(t *testing.T) {
+	if !NewEncodingProfile(EngineFDK).HasConstantBitrate() || NewEncodingProfile(EngineNative).HasConstantBitrate() {
+		t.Fatal("only the FDK engine encodes at a constant bitrate")
+	}
+}

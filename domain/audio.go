@@ -156,17 +156,27 @@ const (
 	EngineNative
 )
 
+var constantBitrateEngines = map[EncoderEngine]bool{
+	EngineFDK:    true,
+	EngineNative: false,
+}
+
 var engineBitrates = map[EncoderEngine]int{
 	EngineFDK:    fdkBitrate,
 	EngineNative: nativeBitrate,
 }
 
 type EncodingProfile struct {
-	bitrate int
+	bitrate           int
+	isConstantBitrate bool
 }
 
 func NewEncodingProfile(engine EncoderEngine) EncodingProfile {
-	return EncodingProfile{bitrate: engineBitrates[engine]}
+	return EncodingProfile{bitrate: engineBitrates[engine], isConstantBitrate: constantBitrateEngines[engine]}
+}
+
+func (profile EncodingProfile) HasConstantBitrate() bool {
+	return profile.isConstantBitrate
 }
 
 func (profile EncodingProfile) Bitrate() int {
