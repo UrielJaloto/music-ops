@@ -159,8 +159,30 @@ function Invoke-SelectedSuites {
     return 0
 }
 
+function Get-LivePrerequisiteProblem {
+    if (-not $env:MUSIC_OPS_LASTFM_API_KEY) {
+        return "MUSIC_OPS_LASTFM_API_KEY is not set"
+    }
+    $config = Join-Path $env:APPDATA "music-ops\config.yaml"
+    $text = if (Test-Path $config) { Get-Content -Raw $config } else { "" }
+    foreach ($key in @("llama_server", "model_file")) {
+        $match = [regex]::Match($text, "(?m)^\s*$key\s*:\s*['""]?([^'""`r`n]+)")
+        if (-not $match.Success -or -not (Test-Path $match.Groups[1].Value.Trim())) {
+            return "local advisor is not installed (run music-ops advisor install)"
+        }
+    }
+    return ""
+}
+
 if ($MyInvocation.InvocationName -ne ".") {
     $suites = Get-SelectedSuites -Switches $PSBoundParameters
+    if ($suites -contains "Live") {
+        $problem = Get-LivePrerequisiteProblem
+        if ($problem) {
+            Write-Host "-Live needs real services: $problem"
+            exit 3
+        }
+    }
     $time = Get-EffectiveFuzzTime -Switches $PSBoundParameters -Requested $FuzzTime
     exit (Invoke-SelectedSuites -Suites $suites -Time $time)
 }

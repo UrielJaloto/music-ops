@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e || live
 
 package main
 
@@ -48,6 +48,10 @@ var fixtureCodecs = map[string]func(fixture) []string{
 	"wav": func(fixture) []string { return []string{"-c:a", "pcm_s16le"} },
 	"mp3": func(fixture) []string { return []string{"-c:a", "libmp3lame", "-b:a", "192k"} },
 	"m4a": func(fixture) []string { return []string{"-c:a", "aac", "-b:a", "192k"} },
+}
+
+func stereo(path, format string, tags fixtureTags) fixture {
+	return fixture{path: path, format: format, tags: tags, sampleRate: 44100, channels: 2, bitDepth: 16, seconds: 2}
 }
 
 func writeFixtures(t *testing.T, ffmpeg, folder string, fixtures ...fixture) {
