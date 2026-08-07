@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -206,12 +207,15 @@ func (application *wiring) newStorage(ctx context.Context) (storageStack, error)
 	if err != nil {
 		return storageStack{}, err
 	}
-	application.onClose(staging.Cleanup)
 	store, err := infrastructure.OpenBoltStore(filepath.Join(output, workFolder, stateFileName))
 	if err != nil {
-		return storageStack{}, err
+		return storageStack{}, errors.Join(err, staging.Cleanup(ctx))
 	}
 	application.onClose(func(context.Context) error { return store.Close() })
+	application.onClose(staging.Cleanup)
+	if err := staging.RemoveOtherRuns(); err != nil {
+		return storageStack{}, err
+	}
 	reports := infrastructure.NewReportStorage(output)
 	logs, err := reports.Create(ctx, string(runID), logFileName)
 	if err != nil {
