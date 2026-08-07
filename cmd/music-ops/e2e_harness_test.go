@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const defaultFDKLibrary = `C:\Program Files\freac\codecs\FDK-AAC.dll`
@@ -190,6 +191,7 @@ func (environment *e2eEnvironment) childEnvironment() []string {
 func (environment *e2eEnvironment) run(arguments ...string) e2eResult {
 	environment.t.Helper()
 	environment.writeConfig()
+	previous := environment.reportPaths()
 	command := exec.CommandContext(context.Background(), e2eBinary, append(arguments, "--no-open")...)
 	command.Env = environment.childEnvironment()
 	command.Stdin = strings.NewReader("")
@@ -197,7 +199,7 @@ func (environment *e2eEnvironment) run(arguments ...string) e2eResult {
 	command.Stdout, command.Stderr = &stdout, &stderr
 	err := command.Run()
 	result := e2eResult{ExitCode: exitCodeOf(err), Stdout: stdout.String(), Stderr: stderr.String()}
-	result.Report = environment.latestReport()
+	result.Report = environment.newReport(previous)
 	return result
 }
 
@@ -212,21 +214,27 @@ func exitCodeOf(err error) int {
 	return -1
 }
 
-func (environment *e2eEnvironment) latestReport() reportJSON {
+func (environment *e2eEnvironment) reportPaths() []string {
 	matches, _ := filepath.Glob(filepath.Join(environment.output, ".music-ops", "runs", "*", "report.json"))
-	if len(matches) == 0 {
-		return reportJSON{}
+	return matches
+}
+
+func (environment *e2eEnvironment) newReport(previous []string) reportJSON {
+	for _, path := range environment.reportPaths() {
+		if slices.Contains(previous, path) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			environment.t.Fatal(err)
+		}
+		var report reportJSON
+		if err := json.Unmarshal(data, &report); err != nil {
+			environment.t.Fatal(err)
+		}
+		return report
 	}
-	sort.Strings(matches)
-	data, err := os.ReadFile(filepath.Clean(matches[len(matches)-1]))
-	if err != nil {
-		environment.t.Fatal(err)
-	}
-	var report reportJSON
-	if err := json.Unmarshal(data, &report); err != nil {
-		environment.t.Fatal(err)
-	}
-	return report
+	return reportJSON{}
 }
 
 func (environment *e2eEnvironment) addInput(fixtures ...fixture) {
@@ -260,7 +268,7 @@ func libraryFiles(t *testing.T, root string) []string {
 func assertTree(t *testing.T, root string, expected ...string) {
 	t.Helper()
 	sort.Strings(expected)
-	if diff := cmp.Diff(expected, libraryFiles(t, root)); diff != "" {
+	if diff := cmp.Diff(expected, libraryFiles(t, root), cmpopts.EquateEmpty()); diff != "" {
 		t.Fatalf("library tree (-want +got):\n%s", diff)
 	}
 }
