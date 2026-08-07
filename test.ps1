@@ -52,8 +52,7 @@ function Get-SuitePrerequisites {
             @{ Name = "ffmpeg"; Hint = "winget install -e --id Gyan.FFmpeg" },
             @{ Name = "ffprobe"; Hint = "winget install -e --id Gyan.FFmpeg" })
         "Lint"        = @(
-            @{ Name = "golangci-lint"; Hint = "go install $GolangciLintModule" },
-            @{ Name = "govulncheck"; Hint = "go install $GovulncheckModule" })
+            @{ Name = "golangci-lint"; Hint = "go install $GolangciLintModule" })
     }
     $common = @(@{ Name = "go"; Hint = "winget install -e --id GoLang.Go" })
     return $common + @($prerequisites[$Suite] | Where-Object { $_ })
@@ -84,6 +83,10 @@ function Invoke-LintSuite {
     }
     if (-not (Invoke-Native "go" @("vet", "./..."))) { return $false }
     if (-not (Invoke-Native "golangci-lint" @("run", "./..."))) { return $false }
+    if (-not (Get-Command "govulncheck" -ErrorAction SilentlyContinue)) {
+        Write-Host "govulncheck: not installed, skipped (runs in CI; go install $GovulncheckModule)"
+        return $true
+    }
     return Invoke-Native "govulncheck" @("./...")
 }
 
