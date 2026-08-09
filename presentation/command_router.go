@@ -13,7 +13,7 @@ const (
 	CommandRun      = "run"
 	CommandPreview  = "preview"
 	CommandConfig   = "config"
-	CommandDoctor   = "doctor"
+	CommandStatus   = "status"
 	CommandWatch    = "watch"
 	CommandAdvisor  = "advisor"
 	CommandVersion  = "version"
@@ -40,7 +40,7 @@ commands:
   config get <key>             print one setting
   config set <key> <value>     change one setting
   config path                  print the settings file location
-  doctor                       check ffmpeg, encoder, Last.fm, advisors and output
+  status                       check ffmpeg, encoder, Last.fm, advisors and output
   watch [inbox]                import every folder that arrives in the inbox
   advisor install              download the local advisor runtime and model
   version                      print the version

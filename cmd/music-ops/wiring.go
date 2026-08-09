@@ -61,7 +61,7 @@ func (application *wiring) router() presentation.CommandRouter {
 		presentation.CommandRun:     application.deferred(application.runCommand),
 		presentation.CommandPreview: application.deferred(application.previewCommand),
 		presentation.CommandWatch:   application.deferred(application.watchCommand),
-		presentation.CommandDoctor:  application.doctorCommand(),
+		presentation.CommandStatus:  application.statusCommand(),
 		presentation.CommandVersion: application.deferred(application.versionCommand),
 		presentation.CommandConfig:  application.configCommand(),
 		presentation.CommandAdvisor: application.advisorCommand(),
@@ -132,7 +132,7 @@ func (application *wiring) advisorCommand() presentation.CommandController {
 	return presentation.NewSetupController(setup, presenter, artifacts)
 }
 
-func (application *wiring) doctorCommand() presentation.CommandController {
+func (application *wiring) statusCommand() presentation.CommandController {
 	config := application.settings.config
 	ffmpeg := infrastructure.FFmpegForDiagnostics(config.Encoder.FFmpeg, exec.LookPath, application.settings.paths.LocalAppData)
 	detector := infrastructure.NewFFmpegCapabilityDetector(application.runner, ffmpeg)
