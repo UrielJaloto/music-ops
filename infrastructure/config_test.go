@@ -45,7 +45,7 @@ func TestConfigStore_Load_Defaults(t *testing.T) {
 	config, err := configStoreWithFile(t, "", nil).Load(context.Background(), nil)
 
 	expected := Config{
-		Output:        OutputConfig{Dir: `D:\Uriel\Music\Curtidas`, Layout: "flat", AlbumTemplate: "{albumartist} - {album}"},
+		Output:        OutputConfig{Dir: `D:\Uriel\Music`, Layout: "flat", AlbumTemplate: "{albumartist} - {album}"},
 		Encoder:       EncoderConfig{FDKLibrary: `C:\Program Files\freac\codecs\FDK-AAC.dll`},
 		LastFM:        LastFMConfig{BaseURL: "https://ws.audioscrobbler.com/2.0/"},
 		Advisor:       AdvisorConfig{Port: 8089, BatchSize: 40},
