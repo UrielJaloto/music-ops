@@ -97,6 +97,9 @@ func TestNewArtistCredit(t *testing.T) {
 		{name: "BlanksDropped", artists: []string{" A ", "", "B"}, expected: []string{"A", "B"}},
 		{name: "RepeatsWithDifferentCase_KeepFirst", artists: []string{"Queen", "QUEEN", "queen "}, expected: []string{"Queen"}},
 		{name: "OrderPreserved", artists: []string{"C", "A", "B"}, expected: []string{"C", "A", "B"}},
+		{name: "CR9_PlaceholderDroppedWhenNamedArtistExists", artists: []string{"VARIOUS ARTISTS", "Hemlock", "Arora"}, expected: []string{"Hemlock", "Arora"}},
+		{name: "CR9_PortuguesePlaceholderDropped", artists: []string{"Vários Artistas", "Liniker"}, expected: []string{"Liniker"}},
+		{name: "CR9_OnlyPlaceholderKept", artists: []string{"Various Artists"}, expected: []string{"Various Artists"}},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
