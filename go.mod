@@ -2,6 +2,8 @@ module github.com/UrielJaloto/music-ops
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/abema/go-mp4 v1.7.3
 	github.com/fsnotify/fsnotify v1.10.1
