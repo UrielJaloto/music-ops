@@ -133,4 +133,12 @@ func TestDuplicateKey(t *testing.T) {
 	if first.DuplicateKey() == other.DuplicateKey() {
 		t.Fatal("different paths share a key")
 	}
+	withGuest := TargetPath{relative: "chill/Band - Song (feat. Guest; Other).m4a"}
+	if withGuest.DuplicateKey() != first.DuplicateKey() {
+		t.Fatalf("featuring suffix kept in key: %q", withGuest.DuplicateKey())
+	}
+	remix := TargetPath{relative: "Band - Song (Remix).m4a"}
+	if remix.DuplicateKey() == first.DuplicateKey() {
+		t.Fatal("version descriptor dropped from key")
+	}
 }
