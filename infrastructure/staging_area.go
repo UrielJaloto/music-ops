@@ -27,17 +27,17 @@ type StagingArea struct {
 	link func(source, destination string) error
 }
 
-func PrepareStagingArea(output string, id domain.RunID) (StagingArea, error) {
-	root := filepath.Join(output, workFolderName, stagingFolderName, string(id))
+func PrepareStagingArea(workRoot string, id domain.RunID) (StagingArea, error) {
+	root := filepath.Join(workRoot, stagingFolderName, string(id))
 	if err := os.MkdirAll(root, stagingFolderPermission); err != nil {
 		return StagingArea{}, fmt.Errorf("creating staging area: %w", err)
 	}
 	probe := filepath.Join(root, stagingProbeName)
 	if err := os.WriteFile(probe, nil, stagingFilePermission); err != nil {
-		return StagingArea{}, fmt.Errorf("output folder is not writable: %w", err)
+		return StagingArea{}, fmt.Errorf("work folder is not writable: %w", err)
 	}
 	if err := os.Remove(probe); err != nil {
-		return StagingArea{}, fmt.Errorf("output folder is not writable: %w", err)
+		return StagingArea{}, fmt.Errorf("work folder is not writable: %w", err)
 	}
 	return StagingArea{root: root, link: os.Link}, nil
 }

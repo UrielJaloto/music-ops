@@ -79,7 +79,7 @@ type controllerFixture struct {
 
 func newImportFixture(opensFiles bool) (ImportController, controllerFixture) {
 	fixture := controllerFixture{
-		reporter: &reporterStub{path: "E:/Music/.music-ops/runs/r1/report.md"},
+		reporter: &reporterStub{path: "C:/Local/music-ops/runs/r1/report.md"},
 		service:  &importServiceSpy{output: services.ImportOutput{RunID: "r1", Output: "E:/Music", ExitStatus: 2}},
 		chooser:  &chooserStub{folder: "D:/Chosen"},
 		finisher: &finisherSpy{},
@@ -99,7 +99,7 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 	if diff := cmp.Diff([]services.ImportInput{expected}, fixture.service.importInputs, cmp.AllowUnexported(domain.EncodingProfile{})); diff != "" {
 		t.Fatalf("input (-want +got):\n%s", diff)
 	}
-	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: E:/Music/.music-ops/runs/r1/report.md") {
+	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: C:/Local/music-ops/runs/r1/report.md") {
 		t.Fatalf("code = %d chooser = %d finisher = %d output = %q", code, fixture.chooser.calls, fixture.finisher.calls, fixture.output.String())
 	}
 }
@@ -127,11 +127,11 @@ func TestImportController_Run_ChooserCancelled(t *testing.T) {
 
 func TestImportController_Run_ImportError(t *testing.T) {
 	controller, fixture := newImportFixture(true)
-	fixture.service.err = services.ErrLibraryBusy
+	fixture.service.err = services.ErrRunInProgress
 
 	code := controller.Run(context.Background(), []string{"D:/In"})
 
-	if code != 1 || fixture.finisher.calls != 0 || fixture.output.String() != "error: another music-ops run is using this library\n" {
+	if code != 1 || fixture.finisher.calls != 0 || fixture.output.String() != "error: another music-ops run is in progress\n" {
 		t.Fatalf("code = %d output = %q", code, fixture.output.String())
 	}
 }
@@ -206,7 +206,7 @@ func TestImportPresenter_SummaryGolden(t *testing.T) {
 		Warnings: []string{"a", "b", "c", "d"},
 	}
 
-	NewImportPresenter(&output, NewErrorPresenter(&output)).Imported(result, "E:/Music/.music-ops/runs/20261016-083005-abcd/report.md")
+	NewImportPresenter(&output, NewErrorPresenter(&output)).Imported(result, "C:/Local/music-ops/runs/20261016-083005-abcd/report.md")
 
 	if output.String() != readGolden(t, "summary.golden") {
 		t.Fatalf("summary:\n%s", output.String())

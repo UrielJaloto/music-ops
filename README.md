@@ -12,7 +12,7 @@
 ## How it works
 
 1. **Discover** every audio file in the folder (`.flac`, `.wav`, `.mp3`, `.m4a`, ...); other files are ignored.
-2. **Convert** each track to AAC in a staging folder inside the library (`.music-ops\staging`).
+2. **Convert** each track to AAC in a staging folder under `%LOCALAPPDATA%\music-ops\staging`; nothing but the finished tracks is written to the library.
 3. **Resolve** titles, featured artists and genres: Last.fm tags first, then the local advisor; every answer is validated and falls back to deterministic rules when it is rejected.
 4. **Publish** the files into the library with their final names and tags, skipping duplicates; the run is journaled, so an interrupted run resumes without duplicates.
 
@@ -88,7 +88,7 @@ Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` 
 - Genres: a main genre and an optional sub-genre from a fixed list, separated by `; ` (for example `Electronic; Dance`, `Rap Nacional`); `desconhecido` when nothing reliable is found.
 - Track numbers: numbered per source folder as `n/total`.
 - Duplicates: the best-quality copy is kept; tracks already anywhere in the library (same file name) are skipped and the library file is left untouched.
-- Every run writes a report under `<library>\.music-ops\runs\<run id>\`.
+- Every run writes a report under `%LOCALAPPDATA%\music-ops\runs\<run id>\`; run state lives in `%LOCALAPPDATA%\music-ops\state.db`.
 
 ## Testing
 

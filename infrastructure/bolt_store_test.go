@@ -147,13 +147,13 @@ func TestBoltStore_CancelledContext(t *testing.T) {
 	}
 }
 
-func TestOpenBoltStore_SecondOpenWhileLocked_ReturnsErrLibraryBusy(t *testing.T) {
+func TestOpenBoltStore_SecondOpenWhileLocked_ReturnsErrRunInProgress(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 	openTestStore(t, path)
 
 	_, err := OpenBoltStore(path)
 
-	if !errors.Is(err, services.ErrLibraryBusy) {
+	if !errors.Is(err, services.ErrRunInProgress) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestOpenBoltStore_SecondOpenWhileLocked_ReturnsErrLibraryBusy(t *testing.T)
 func TestOpenBoltStore_MissingFolder(t *testing.T) {
 	_, err := OpenBoltStore(filepath.Join(t.TempDir(), "missing", "state.db"))
 
-	if err == nil || errors.Is(err, services.ErrLibraryBusy) {
+	if err == nil || errors.Is(err, services.ErrRunInProgress) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -216,7 +216,7 @@ func TestReportStorage_Create(t *testing.T) {
 	_, writeErr := io.WriteString(writer, "# Report")
 	closeErr := writer.Close()
 
-	content, readErr := os.ReadFile(filepath.Join(output, ".music-ops", "runs", "20261016-083005-abcd", "report.md"))
+	content, readErr := os.ReadFile(filepath.Join(output, "runs", "20261016-083005-abcd", "report.md"))
 	if writeErr != nil || closeErr != nil || readErr != nil || string(content) != "# Report" {
 		t.Fatalf("content = %q errors = %v %v %v", content, writeErr, closeErr, readErr)
 	}
@@ -239,7 +239,7 @@ func TestReportStorage_Create_Errors(t *testing.T) {
 func TestReportStorage_Location(t *testing.T) {
 	location := NewReportStorage("E:/Music").Location("run-1", "report.md")
 
-	if location != filepath.Join("E:/Music", ".music-ops", "runs", "run-1", "report.md") {
+	if location != filepath.Join("E:/Music", "runs", "run-1", "report.md") {
 		t.Fatalf("location = %s", location)
 	}
 }

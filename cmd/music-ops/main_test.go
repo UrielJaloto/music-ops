@@ -16,7 +16,8 @@ import (
 
 func testEnvironment(t *testing.T) func(string) (string, bool) {
 	t.Helper()
-	isolated := map[string]string{"APPDATA": filepath.Join(t.TempDir(), "appdata")}
+	root := t.TempDir()
+	isolated := map[string]string{"APPDATA": filepath.Join(root, "appdata"), "LOCALAPPDATA": filepath.Join(root, "localappdata")}
 	return func(name string) (string, bool) {
 		if value, isSet := isolated[name]; isSet {
 			return value, true
@@ -120,7 +121,7 @@ func TestWiring_SecondImportStackReportsBusyLibrary(t *testing.T) {
 	_, firstErr := application.newImportController(context.Background())
 	_, secondErr := application.newImportController(context.Background())
 
-	if firstErr != nil || !errors.Is(secondErr, services.ErrLibraryBusy) {
+	if firstErr != nil || !errors.Is(secondErr, services.ErrRunInProgress) {
 		t.Fatalf("errors = %v %v", firstErr, secondErr)
 	}
 }

@@ -25,7 +25,7 @@ type BoltStore struct {
 func OpenBoltStore(path string) (*BoltStore, error) {
 	database, err := bolt.Open(path, boltFilePermission, &bolt.Options{Timeout: boltLockTimeout})
 	if errors.Is(err, boltErrors.ErrTimeout) {
-		return nil, fmt.Errorf("%w: %s", services.ErrLibraryBusy, path)
+		return nil, fmt.Errorf("%w: %s", services.ErrRunInProgress, path)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("opening store %s: %w", path, err)

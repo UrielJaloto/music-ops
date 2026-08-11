@@ -28,7 +28,7 @@ var errorMessages = []errorMessage{
 	{target: services.ErrSettingUnknown, message: "unknown setting; run: music-ops config show", code: exitFailure},
 	{target: services.ErrSettingInvalid, message: "invalid setting value", code: exitFailure},
 	{target: services.ErrSettingKeyMissing, message: "a setting key is required", code: exitFailure},
-	{target: services.ErrLibraryBusy, message: "another music-ops run is using this library", code: exitFailure},
+	{target: services.ErrRunInProgress, message: "another music-ops run is in progress", code: exitFailure},
 	{target: services.ErrFFmpegMissing, message: "ffmpeg was not found; install it with: winget install -e --id Gyan.FFmpeg", code: exitFailure},
 	{target: services.ErrLocalAdvisorNotInstalled, message: "the local advisor is not installed; run: music-ops advisor install", code: exitFailure},
 	{target: services.ErrLastFMKeyInvalid, message: "the Last.fm API key is invalid; run: music-ops config set lastfm.api_key <key>", code: exitFailure},

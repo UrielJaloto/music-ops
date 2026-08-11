@@ -14,11 +14,11 @@ import (
 )
 
 func TestFinishCommands_Golden(t *testing.T) {
-	commands := finishCommands(`E:\Music\.music-ops\runs\r1\report.md`, `E:\Music`)
+	commands := finishCommands(`C:\Local\music-ops\runs\r1\report.md`, `E:\Music`)
 
 	expected := []ProcessRequest{
 		{Executable: "powershell", Arguments: []string{"-NoProfile", "-Command", "[System.Media.SystemSounds]::Asterisk.Play()"}},
-		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `E:\Music\.music-ops\runs\r1\report.md`}},
+		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `C:\Local\music-ops\runs\r1\report.md`}},
 		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `E:\Music`}},
 	}
 	if diff := cmp.Diff(expected, commands); diff != "" {
@@ -58,7 +58,7 @@ func TestDesktopShell_Finish(t *testing.T) {
 			if (err != nil) != testCase.isFailure || len(runner.requests) != 3 {
 				t.Fatalf("err = %v requests = %d", err, len(runner.requests))
 			}
-			if runner.requests[1].Arguments[1] != filepath.Join("E:/Music", ".music-ops", "runs", "r1", "report.md") {
+			if runner.requests[1].Arguments[1] != filepath.Join("E:/Music", "runs", "r1", "report.md") {
 				t.Fatalf("report path = %s", runner.requests[1].Arguments[1])
 			}
 		})

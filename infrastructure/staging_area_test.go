@@ -25,7 +25,7 @@ func prepareTestStaging(t *testing.T) (StagingArea, string) {
 func TestPrepareStagingArea_CreatesRunFolder(t *testing.T) {
 	area, output := prepareTestStaging(t)
 
-	expectedRoot := filepath.Join(output, ".music-ops", "staging", "20261016-083005-abcd")
+	expectedRoot := filepath.Join(output, "staging", "20261016-083005-abcd")
 	entries, err := os.ReadDir(expectedRoot)
 	if err != nil || area.root != expectedRoot || len(entries) != 0 {
 		t.Fatalf("root = %s entries = %v err = %v", area.root, entries, err)
@@ -119,7 +119,7 @@ func TestStagingArea_ShortenSourcePath_Cancelled(t *testing.T) {
 
 func TestStagingArea_RemoveOtherRuns(t *testing.T) {
 	area, output := prepareTestStaging(t)
-	staging := filepath.Join(output, ".music-ops", "staging")
+	staging := filepath.Join(output, "staging")
 	writeTestFile(t, filepath.Join(staging, "20261015-000000-dead", "track.audio.m4a"), "x")
 	writeTestFile(t, filepath.Join(staging, "loose.tmp"), "x")
 	writeTestFile(t, area.BuildStagedPath("own", ".audio.m4a"), "x")
@@ -134,7 +134,7 @@ func TestStagingArea_RemoveOtherRuns(t *testing.T) {
 
 func TestStagingArea_RemoveOtherRuns_ParentMissing(t *testing.T) {
 	area, output := prepareTestStaging(t)
-	if err := os.RemoveAll(filepath.Join(output, ".music-ops")); err != nil {
+	if err := os.RemoveAll(filepath.Join(output, "staging")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestStagingArea_RemoveOtherRuns_ParentMissing(t *testing.T) {
 
 func TestStagingArea_Cleanup(t *testing.T) {
 	area, output := prepareTestStaging(t)
-	parent := filepath.Join(output, ".music-ops", "staging")
+	parent := filepath.Join(output, "staging")
 	writeTestFile(t, area.BuildStagedPath("t1", ".m4a"), "x")
 	recent := filepath.Join(parent, "recent-run")
 	old := filepath.Join(parent, "old-run")

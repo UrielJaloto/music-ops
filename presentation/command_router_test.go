@@ -188,12 +188,12 @@ func TestErrorPresenter_Present(t *testing.T) {
 		{err: services.ErrSettingUnknown, expectedMessage: "unknown setting; run: music-ops config show", expectedCode: 1},
 		{err: services.ErrSettingInvalid, expectedMessage: "invalid setting value", expectedCode: 1},
 		{err: services.ErrSettingKeyMissing, expectedMessage: "a setting key is required", expectedCode: 1},
-		{err: services.ErrLibraryBusy, expectedMessage: "another music-ops run is using this library", expectedCode: 1},
+		{err: services.ErrRunInProgress, expectedMessage: "another music-ops run is in progress", expectedCode: 1},
 		{err: services.ErrFFmpegMissing, expectedMessage: "ffmpeg was not found; install it with: winget install -e --id Gyan.FFmpeg", expectedCode: 1},
 		{err: services.ErrLocalAdvisorNotInstalled, expectedMessage: "the local advisor is not installed; run: music-ops advisor install", expectedCode: 1},
 		{err: services.ErrLastFMKeyInvalid, expectedMessage: "the Last.fm API key is invalid; run: music-ops config set lastfm.api_key <key>", expectedCode: 1},
 		{err: ErrCommandLineInvalid, expectedMessage: "invalid command line; run: music-ops help", expectedCode: 1},
-		{err: fmt.Errorf("opening library: %w", services.ErrLibraryBusy), expectedMessage: "another music-ops run is using this library", expectedCode: 1},
+		{err: fmt.Errorf("opening library: %w", services.ErrRunInProgress), expectedMessage: "another music-ops run is in progress", expectedCode: 1},
 		{err: errors.New("disk on fire"), expectedMessage: "music-ops failed: disk on fire", expectedCode: 1},
 	}
 	for _, testCase := range cases {

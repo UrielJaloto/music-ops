@@ -13,7 +13,7 @@ import (
 var (
 	ErrOutputInsideInput     = errors.New("output folder must not be inside the input folder")
 	ErrFolderChoiceCancelled = errors.New("folder choice was cancelled")
-	ErrLibraryBusy           = errors.New("another music-ops run is using this library")
+	ErrRunInProgress         = errors.New("another music-ops run is in progress")
 )
 
 const (

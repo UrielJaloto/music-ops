@@ -310,14 +310,14 @@ func TestE2E_CrashThenResume(t *testing.T) {
 		t.Fatalf("crashed = %d %s resumed = %+v", crashed.ExitCode, crashed.Stderr, resumed)
 	}
 	assertTree(t, environment.output, "in/Band - One.m4a", "in/Band - Three.m4a", "in/Band - Two.m4a")
-	assertNoLeftovers(t, environment.output)
+	assertNoLeftovers(t, environment.output, environment.localAppData)
 	assertInputUnchanged(t, environment.input, before)
 }
 
-func assertNoLeftovers(t *testing.T, output string) {
+func assertNoLeftovers(t *testing.T, output, localAppData string) {
 	t.Helper()
 	leftovers, _ := filepath.Glob(filepath.Join(output, "*.tmp"))
-	staged, _ := filepath.Glob(filepath.Join(output, ".music-ops", "staging", "*", "*"))
+	staged, _ := filepath.Glob(filepath.Join(localAppData, "music-ops", "staging", "*", "*"))
 	if len(leftovers) != 0 || len(staged) != 0 {
 		t.Fatalf("leftovers = %v staged = %v", leftovers, staged)
 	}
@@ -354,6 +354,6 @@ func TestE2E_Cancellation(t *testing.T) {
 	if result.ExitCode != 130 || !bytes.Contains([]byte(result.Stderr), []byte("cancelled")) {
 		t.Fatalf("result = %+v", result)
 	}
-	assertNoLeftovers(t, environment.output)
+	assertNoLeftovers(t, environment.output, environment.localAppData)
 	assertInputUnchanged(t, environment.input, before)
 }
