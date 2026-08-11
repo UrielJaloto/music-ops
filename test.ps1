@@ -160,11 +160,11 @@ function Invoke-SelectedSuites {
 }
 
 function Get-LivePrerequisiteProblem {
-    if (-not $env:MUSIC_OPS_LASTFM_API_KEY) {
-        return "MUSIC_OPS_LASTFM_API_KEY is not set"
-    }
     $config = Join-Path $env:APPDATA "music-ops\config.yaml"
     $text = if (Test-Path $config) { Get-Content -Raw $config } else { "" }
+    if (-not [regex]::IsMatch($text, "(?m)^\s*api_key\s*:\s*\S+")) {
+        return "lastfm.api_key is not set (music-ops config set lastfm.api_key <key>)"
+    }
     foreach ($key in @("llama_server", "model_file")) {
         $match = [regex]::Match($text, "(?m)^\s*$key\s*:\s*['""]?([^'""`r`n]+)")
         if (-not $match.Success -or -not (Test-Path $match.Groups[1].Value.Trim())) {

@@ -57,7 +57,7 @@ func TestFFprobeInspector_Inspect(t *testing.T) {
 			Codec:   "aac",
 			Quality: domain.AudioQualityDetails{SampleRate: 44100, BitDepth: 32, Channels: 2, BitRate: 256000, Duration: 180023220 * time.Microsecond},
 			Tags: domain.SourceTags{
-				Title: "Song", Artist: "Artist", AlbumArtist: "Artist", Album: "Curtidas", Date: "2024",
+				Title: "Song", Artist: "Artist", AlbumArtist: "Artist", Album: "Favorites", Date: "2024",
 				Position: domain.SourcePosition{TrackNumber: 5, TrackTotal: 50, DiscNumber: 1, DiscTotal: 1},
 			},
 			Cover: domain.CoverArt{Stream: 1, Codec: "mjpeg"},

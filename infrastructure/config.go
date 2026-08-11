@@ -42,6 +42,8 @@ const (
 	minimumBatch         = 1
 	maximumBatch         = 200
 	appDataVariable      = "APPDATA"
+	userProfileVariable  = "USERPROFILE"
+	defaultMusicFolder   = "Music"
 	localAppDataVariable = "LOCALAPPDATA"
 )
 
@@ -144,7 +146,22 @@ func (store ConfigStore) Load(ctx context.Context, overrides map[string]string) 
 	if err := mergeKnownKeys(values, overrides); err != nil {
 		return Config{}, err
 	}
-	return toConfig(values)
+	config, err := toConfig(values)
+	if err != nil {
+		return Config{}, err
+	}
+	if config.Output.Dir == "" {
+		config.Output.Dir = store.defaultOutput()
+	}
+	return config, nil
+}
+
+func (store ConfigStore) defaultOutput() string {
+	profile, _ := store.environment(userProfileVariable)
+	if profile == "" {
+		return ""
+	}
+	return filepath.Join(profile, defaultMusicFolder)
 }
 
 type EnvironmentPaths struct {

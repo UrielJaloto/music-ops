@@ -68,15 +68,16 @@ Describe "test.ps1" {
     }
 
     It "Live_WithoutLastFMKey_ReportsKey" {
-        $saved = $env:MUSIC_OPS_LASTFM_API_KEY
-        $env:MUSIC_OPS_LASTFM_API_KEY = ""
-        try { Get-LivePrerequisiteProblem | Should -Match "MUSIC_OPS_LASTFM_API_KEY" } finally { $env:MUSIC_OPS_LASTFM_API_KEY = $saved }
+        $saved = $env:APPDATA
+        $env:APPDATA = Join-Path $TestDrive "nokey"
+        try { Get-LivePrerequisiteProblem | Should -Match "lastfm.api_key" } finally { $env:APPDATA = $saved }
     }
 
     It "Live_WithoutInstalledAdvisor_ReportsInstall" {
         $saved = @($env:MUSIC_OPS_LASTFM_API_KEY, $env:APPDATA)
-        $env:MUSIC_OPS_LASTFM_API_KEY = "key"
         $env:APPDATA = Join-Path $TestDrive "empty"
+        New-Item -ItemType Directory -Force (Join-Path $env:APPDATA "music-ops") | Out-Null
+        Set-Content -Path (Join-Path $env:APPDATA "music-ops\config.yaml") -Value "lastfm:`n  api_key: key"
         try { Get-LivePrerequisiteProblem | Should -Match "advisor install" } finally { $env:MUSIC_OPS_LASTFM_API_KEY, $env:APPDATA = $saved }
     }
 
@@ -87,7 +88,7 @@ Describe "test.ps1" {
         $server = New-Item -ItemType File -Path (Join-Path $TestDrive "llama-server.exe") -Force
         $model = New-Item -ItemType File -Path (Join-Path $TestDrive "model.gguf") -Force
         New-Item -ItemType Directory -Path (Join-Path $TestDrive "music-ops") -Force | Out-Null
-        Set-Content -Path (Join-Path $TestDrive "music-ops\config.yaml") -Value "advisor:`n  llama_server: '$($server.FullName)'`n  model_file: ""$($model.FullName)"""
+        Set-Content -Path (Join-Path $TestDrive "music-ops\config.yaml") -Value "lastfm:`n  api_key: key`nadvisor:`n  llama_server: '$($server.FullName)'`n  model_file: ""$($model.FullName)"""
         try { Get-LivePrerequisiteProblem | Should -Be "" } finally { $env:MUSIC_OPS_LASTFM_API_KEY, $env:APPDATA = $saved }
     }
 }
