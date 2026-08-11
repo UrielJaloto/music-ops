@@ -122,7 +122,7 @@ func (service ConversionService) convertTrack(ctx context.Context, track Convert
 }
 
 func (service ConversionService) writeStagedAudio(ctx context.Context, codec domain.Codec, request EncodeRequest) error {
-	if domain.DecideEncoding(codec) == domain.DecisionCopy {
+	if domain.DecideEncoding(codec, request.Quality) == domain.DecisionCopy {
 		if err := service.copier.CopyAudio(ctx, request.Source, request.Destination); err != nil {
 			return fmt.Errorf("copying audio: %w", err)
 		}

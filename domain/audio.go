@@ -206,8 +206,8 @@ const (
 	DecisionCopy
 )
 
-func DecideEncoding(codec Codec) EncodingDecision {
-	if codec.Family() == FamilyAAC {
+func DecideEncoding(codec Codec, quality AudioQuality) EncodingDecision {
+	if codec.Family() == FamilyAAC && quality.SampleRate() == targetSampleRate {
 		return DecisionCopy
 	}
 	return DecisionEncode

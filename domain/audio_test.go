@@ -179,18 +179,21 @@ func TestEncodingProfile_NeedsResampling(t *testing.T) {
 
 func TestDecideEncoding(t *testing.T) {
 	cases := []struct {
-		name     string
-		codec    Codec
-		expected EncodingDecision
+		name       string
+		codec      Codec
+		sampleRate int
+		expected   EncodingDecision
 	}{
-		{name: "AUD8_AACIsCopied", codec: "aac", expected: DecisionCopy},
-		{name: "AUD9_MP3IsEncoded", codec: "mp3", expected: DecisionEncode},
-		{name: "AUD9_OpusIsEncoded", codec: "opus", expected: DecisionEncode},
-		{name: "LosslessIsEncoded", codec: "flac", expected: DecisionEncode},
+		{name: "AUD8_AACIsCopied", codec: "aac", sampleRate: 44100, expected: DecisionCopy},
+		{name: "AUD8_AACAt48kIsEncoded", codec: "aac", sampleRate: 48000, expected: DecisionEncode},
+		{name: "AUD9_MP3IsEncoded", codec: "mp3", sampleRate: 44100, expected: DecisionEncode},
+		{name: "AUD9_OpusIsEncoded", codec: "opus", sampleRate: 48000, expected: DecisionEncode},
+		{name: "LosslessIsEncoded", codec: "flac", sampleRate: 44100, expected: DecisionEncode},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if got := DecideEncoding(testCase.codec); got != testCase.expected {
+			quality := mustQuality(t, func(details *AudioQualityDetails) { details.SampleRate = testCase.sampleRate })
+			if got := DecideEncoding(testCase.codec, quality); got != testCase.expected {
 				t.Fatalf("DecideEncoding = %v, want %v", got, testCase.expected)
 			}
 		})
