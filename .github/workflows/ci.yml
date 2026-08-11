@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     runs-on: windows-latest
+    env:
+      MUSIC_OPS_STRICT: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -15,18 +17,6 @@ jobs:
           go-version: '1.26'
           check-latest: true
           cache: true
-      - name: Install Go tools
-        shell: pwsh
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
-          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          install: mingw-w64-ucrt-x86_64-gcc
-      - name: Add gcc to PATH
-        shell: pwsh
-        run: Add-Content $env:GITHUB_PATH "$env:RUNNER_TEMP\msys64\ucrt64\bin"
       - name: Install ffmpeg
         shell: pwsh
         run: choco install ffmpeg -y --no-progress
@@ -41,9 +31,11 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $folder
           $library = Get-ChildItem -Path $folder -Recurse -Filter "FDK-AAC.dll" | Select-Object -First 1
           Add-Content $env:GITHUB_ENV "MUSIC_OPS_ENCODER_FDK_LIBRARY=$($library.FullName)"
-      - name: Test runner tests
-        shell: pwsh
-        run: Invoke-Pester ./test.Tests.ps1 -CI
-      - name: Suites
-        shell: pwsh
-        run: ./test.ps1 -Lint -Unit -Race -Integration -E2E -Cover
+      - name: Unit tests
+        run: go test -count=1 -shuffle=on -cover ./...
+      - name: Integration tests
+        run: go test -count=1 -tags integration ./...
+      - name: End-to-end tests
+        run: go test -count=1 -tags e2e ./cmd/...
+      - name: Vulnerability check
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...

@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -89,7 +87,7 @@ func TestFFprobeInspector_Inspect(t *testing.T) {
 
 			inspected, err := NewFFprobeInspector(runner, "ffprobe").Inspect(context.Background(), "song.flac")
 
-			if diff := cmp.Diff(testCase.expected, inspected); diff != "" || err != nil {
+			if diff := differences(testCase.expected, inspected); diff != "" || err != nil {
 				t.Fatalf("inspected (-want +got):\n%s err = %v", diff, err)
 			}
 		})

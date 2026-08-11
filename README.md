@@ -92,11 +92,12 @@ Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` 
 
 ## Testing
 
-```
-./test.ps1 -All
-```
-
-`./test.ps1 -Live` runs a short import against the real Last.fm and the installed advisor; it exits with code 3 when `lastfm.api_key` or the advisor is missing from your config.
+| Suite | Command |
+|---|---|
+| Unit | `go test ./...` |
+| Integration (needs ffmpeg) | `go test -tags integration ./...` |
+| End-to-end: builds the binary and runs real imports on generated audio | `go test -tags e2e ./cmd/...` |
+| Live: a short import against the real Last.fm and local advisor | `go test -tags live ./cmd/...` |
 
 ## Building
 

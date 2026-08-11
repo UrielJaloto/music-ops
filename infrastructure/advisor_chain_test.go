@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -86,10 +84,10 @@ func TestAdvisorChain_SuggestCredits(t *testing.T) {
 
 			suggestions, err := chain.SuggestCredits(context.Background(), songRequests())
 
-			if diff := cmp.Diff(testCase.expected, suggestions); diff != "" || err != nil {
+			if diff := differences(testCase.expected, suggestions); diff != "" || err != nil {
 				t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 			}
-			if diff := cmp.Diff(testCase.secondBatches, testCase.second.creditBatches); diff != "" {
+			if diff := differences(testCase.secondBatches, testCase.second.creditBatches); diff != "" {
 				t.Fatalf("second advisor batches (-want +got):\n%s", diff)
 			}
 		})
@@ -105,7 +103,7 @@ func TestAdvisorChain_SuggestGenres_RejectsInvalidGenre(t *testing.T) {
 
 	suggestions, err := chain.SuggestGenres(context.Background(), []services.GenreRequest{{Key: "g1"}})
 
-	if diff := cmp.Diff([]services.GenreSuggestion{valid}, suggestions); diff != "" || err != nil {
+	if diff := differences([]services.GenreSuggestion{valid}, suggestions); diff != "" || err != nil {
 		t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 	}
 }
@@ -128,7 +126,7 @@ func TestAdvisorChain_ProbeAndNames(t *testing.T) {
 	reports := chain.ProbeAdvisors(context.Background())
 
 	expected := []services.AdvisorReport{{Name: "local:qwen", IsAvailable: true}, {Name: "local:backup"}}
-	if diff := cmp.Diff(expected, reports); diff != "" || chain.Names() != "local:qwen,local:backup" {
+	if diff := differences(expected, reports); diff != "" || chain.Names() != "local:qwen,local:backup" {
 		t.Fatalf("reports (-want +got):\n%s names = %s", diff, chain.Names())
 	}
 }
@@ -156,7 +154,7 @@ func TestCreditAdvisorCache(t *testing.T) {
 	if firstErr != nil || secondErr != nil || len(first) != 2 || len(inner.creditBatches) != 1 {
 		t.Fatalf("first = %v batches = %v errors = %v %v", first, inner.creditBatches, firstErr, secondErr)
 	}
-	if diff := cmp.Diff([]services.CreditSuggestion{goodCredit("other-a", "Song A", "Main", "X")}, second); diff != "" {
+	if diff := differences([]services.CreditSuggestion{goodCredit("other-a", "Song A", "Main", "X")}, second); diff != "" {
 		t.Fatalf("second (-want +got):\n%s", diff)
 	}
 	for key := range cache.ttls {

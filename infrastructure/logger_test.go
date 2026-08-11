@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -121,10 +119,10 @@ func TestImportServiceLogger_IsTransparent(t *testing.T) {
 			importOutput, importErr := importDecorator.Import(context.Background(), services.ImportInput{})
 			previewOutput, previewErr := previewDecorator.Preview(context.Background(), services.ImportInput{})
 
-			if diff := cmp.Diff(testCase.stub.importOutput, importOutput); diff != "" || !errors.Is(importErr, testCase.stub.err) {
+			if diff := differences(testCase.stub.importOutput, importOutput); diff != "" || !errors.Is(importErr, testCase.stub.err) {
 				t.Fatalf("import diff %s err = %v", diff, importErr)
 			}
-			if diff := cmp.Diff(testCase.stub.previewOutput, previewOutput); diff != "" || !errors.Is(previewErr, testCase.stub.err) {
+			if diff := differences(testCase.stub.previewOutput, previewOutput); diff != "" || !errors.Is(previewErr, testCase.stub.err) {
 				t.Fatalf("preview diff %s err = %v", diff, previewErr)
 			}
 			assertFinishedRecord(t, decodeLogRecords(t, &importLog), "import", testCase.stub.err)
@@ -156,7 +154,7 @@ func TestConversionServiceLogger_IsTransparent(t *testing.T) {
 
 			output, err := NewConversionServiceLogger(testCase.stub, NewLogger(&logs, nil), newTestClock()).Convert(context.Background(), services.ConvertInput{})
 
-			if diff := cmp.Diff(testCase.stub.output, output); diff != "" || !errors.Is(err, testCase.stub.err) {
+			if diff := differences(testCase.stub.output, output); diff != "" || !errors.Is(err, testCase.stub.err) {
 				t.Fatalf("diff %s err = %v", diff, err)
 			}
 			records := decodeLogRecords(t, &logs)
@@ -208,13 +206,13 @@ func TestPublishingServiceLogger_IsTransparent(t *testing.T) {
 			admitted, admitErr := NewPublishingServiceLogger(testCase.stub, NewLogger(&admitLog, nil), newTestClock()).Admit(ctx, services.AdmitInput{})
 			output, publishErr := NewPublishingServiceLogger(testCase.stub, NewLogger(&publishLog, nil), newTestClock()).Publish(ctx, services.PublishInput{})
 
-			if diff := cmp.Diff(testCase.stub.published, published); diff != "" || !errors.Is(findErr, testCase.stub.err) {
+			if diff := differences(testCase.stub.published, published); diff != "" || !errors.Is(findErr, testCase.stub.err) {
 				t.Fatalf("find diff %s err = %v", diff, findErr)
 			}
-			if diff := cmp.Diff(testCase.stub.admitted, admitted); diff != "" || !errors.Is(admitErr, testCase.stub.err) {
+			if diff := differences(testCase.stub.admitted, admitted); diff != "" || !errors.Is(admitErr, testCase.stub.err) {
 				t.Fatalf("admit diff %s err = %v", diff, admitErr)
 			}
-			if diff := cmp.Diff(testCase.stub.output, output); diff != "" || !errors.Is(publishErr, testCase.stub.err) {
+			if diff := differences(testCase.stub.output, output); diff != "" || !errors.Is(publishErr, testCase.stub.err) {
 				t.Fatalf("publish diff %s err = %v", diff, publishErr)
 			}
 			assertFinishedRecord(t, decodeLogRecords(t, &findLog), "find_published", testCase.stub.err)

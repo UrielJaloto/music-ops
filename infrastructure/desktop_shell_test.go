@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/services"
 )
 
@@ -21,7 +19,7 @@ func TestFinishCommands_Golden(t *testing.T) {
 		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `C:\Local\music-ops\runs\r1\report.md`}},
 		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `E:\Music`}},
 	}
-	if diff := cmp.Diff(expected, commands); diff != "" {
+	if diff := differences(expected, commands); diff != "" {
 		t.Fatalf("commands (-want +got):\n%s", diff)
 	}
 }
@@ -80,7 +78,7 @@ func TestFolderPicker_RemembersLastFolder(t *testing.T) {
 	if firstErr != nil || secondErr != nil || first != "D:/Downloads/Album" || second != first || explicit != first {
 		t.Fatalf("folders = %s %s errors = %v %v", first, second, firstErr, secondErr)
 	}
-	if diff := cmp.Diff([]string{"", "D:/Downloads/Album", "C:/Start"}, starts); diff != "" {
+	if diff := differences([]string{"", "D:/Downloads/Album", "C:/Start"}, starts); diff != "" {
 		t.Fatalf("starts (-want +got):\n%s", diff)
 	}
 }

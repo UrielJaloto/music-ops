@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -47,7 +45,7 @@ func TestFFmpegAACEncoder_ArgumentsGolden(t *testing.T) {
 
 			err := NewFFmpegAACEncoder(runner, "ffmpeg", FFmpegCapabilities{resampler: soxrResampler{}}).Encode(context.Background(), request)
 
-			if diff := cmp.Diff(testCase.expected("in.flac", destination+".tmp"), runner.arguments); diff != "" || err != nil {
+			if diff := differences(testCase.expected("in.flac", destination+".tmp"), runner.arguments); diff != "" || err != nil {
 				t.Fatalf("arguments (-want +got):\n%s err = %v", diff, err)
 			}
 			if !isFile(destination) || isFile(destination+".tmp") {
@@ -64,7 +62,7 @@ func TestFFmpegAudioCopier_ArgumentsGolden(t *testing.T) {
 	err := NewFFmpegAudioCopier(runner, "ffmpeg").CopyAudio(context.Background(), "in.m4a", destination)
 
 	expected := []string{"-hide_banner", "-nostdin", "-y", "-i", "in.m4a", "-map", "0:a:0", "-vn", "-c:a", "copy", "-map_metadata", "-1", "-f", "mp4", "-movflags", "+faststart", destination + ".tmp"}
-	if diff := cmp.Diff(expected, runner.arguments); diff != "" || err != nil || !isFile(destination) {
+	if diff := differences(expected, runner.arguments); diff != "" || err != nil || !isFile(destination) {
 		t.Fatalf("arguments (-want +got):\n%s err = %v", diff, err)
 	}
 }
