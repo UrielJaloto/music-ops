@@ -5,18 +5,50 @@ on:
     branches: [main, develop]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  test:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+      - name: Vet
+        run: go vet ./...
+      - name: Vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test -race ./...
+
+  windows:
     runs-on: windows-latest
     env:
       MUSIC_OPS_STRICT: "1"
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
-          check-latest: true
-          cache: true
+          go-version-file: go.mod
       - name: Install ffmpeg
         shell: pwsh
         run: choco install ffmpeg -y --no-progress
@@ -31,11 +63,13 @@ jobs:
           Expand-Archive -Path $zip -DestinationPath $folder
           $library = Get-ChildItem -Path $folder -Recurse -Filter "FDK-AAC.dll" | Select-Object -First 1
           Add-Content $env:GITHUB_ENV "MUSIC_OPS_ENCODER_FDK_LIBRARY=$($library.FullName)"
-      - name: Unit tests
-        run: go test -count=1 -shuffle=on -cover ./...
-      - name: Integration tests
-        run: go test -count=1 -tags integration ./...
-      - name: End-to-end tests
-        run: go test -count=1 -tags e2e ./cmd/...
-      - name: Vulnerability check
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - name: Vet
+        run: for tags in "" integration e2e eval live; do go vet -tags "$tags" ./... || exit 1; done
+      - name: Coverage gate
+        run: |
+          mkdir -p cover
+          go test -tags integration -cover -coverpkg=./... ./... -args -test.gocoverdir="$PWD/cover"
+          MUSIC_OPS_E2E_COVERDIR="$PWD/cover" go test -tags e2e ./internal/test/e2e/
+          go tool covdata textfmt -i=cover -o cover.out
+          go tool cover -func=cover.out | tail -n 1
+          awk 'NR > 1 && $2 > 0 && $3 == 0 { print; missed = 1 } END { exit missed }' cover.out

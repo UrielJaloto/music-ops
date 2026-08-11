@@ -60,7 +60,7 @@ A batch of 20 FLAC tracks (about 1 GB) takes about 70 seconds on an 8 GB NVIDIA 
 
 ## Configuration
 
-Every setting lives in one file per user, `%APPDATA%\music-ops\config.yaml`, created and updated by `music-ops config set <key> <value>` (`music-ops config path` prints its location). See [config.example.yaml](config.example.yaml) for every key with its default. Nothing personal is stored in the repository.
+Every setting lives in one file per user, `%APPDATA%\music-ops\config.yaml`, created and updated by `music-ops config set <key> <value>` (`music-ops config path` prints its location). See [config_default.yaml](internal/infrastructure/config/config_default.yaml) for every key with its default. Nothing personal is stored in the repository.
 
 ## Usage
 
@@ -102,7 +102,7 @@ Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` 
 ## Building
 
 ```
-./build.ps1 -Version 0.1.0
+./build/build.ps1 -Version 0.1.0
 ```
 
 It writes `dist/music-ops.exe` and `dist/checksums.txt`. Pushing a tag `v*` builds and publishes a release.
