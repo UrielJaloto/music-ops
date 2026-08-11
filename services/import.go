@@ -476,9 +476,15 @@ func (session *importSession) failTrack(track *domain.Track, stage string, err e
 	}
 }
 
+func extractFolderName(folder string) string {
+	trimmed := strings.TrimRight(folder, "/\\")
+	return trimmed[strings.LastIndexAny(trimmed, "/\\")+1:]
+}
+
 func buildTarget(track *domain.Track, input ImportInput) (domain.TargetPath, error) {
 	tags := track.Source().Tags
 	return domain.NewTargetPath(domain.TargetPathDetails{
+		Folder:      extractFolderName(input.Folder),
 		Layout:      input.Layout,
 		Template:    input.AlbumTemplate,
 		AlbumArtist: track.Credit().Artists().MainArtist(),

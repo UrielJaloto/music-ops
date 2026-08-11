@@ -268,7 +268,7 @@ func TestImportService_Import_HappyPath_PublishesAllTracks(t *testing.T) {
 		t.Fatalf("output = %+v", output)
 	}
 	first := findRow(t, output.Rows, "in/album/01.flac")
-	expectedFirst := ImportRow{Source: "in/album/01.flac", Target: "Band - First (feat. Guest).m4a", Title: "First", Artist: "Band; Guest", Genre: "desconhecido", Status: "published"}
+	expectedFirst := ImportRow{Source: "in/album/01.flac", Target: "in/Band - First (feat. Guest).m4a", Title: "First", Artist: "Band; Guest", Genre: "desconhecido", Status: "published"}
 	if first != expectedFirst {
 		t.Fatalf("row = %+v, want %+v", first, expectedFirst)
 	}
@@ -376,12 +376,12 @@ func TestImportService_Import_InfrastructureErrors(t *testing.T) {
 
 func TestImportService_Import_DuplicateInLibrary_NotPublished(t *testing.T) {
 	doubles := newImportDoubles(t)
-	doubles.publisher.libraryTargets["Band - Second.m4a"] = true
+	doubles.publisher.libraryTargets["in/Band - Second.m4a"] = true
 
 	output, err := doubles.service().Import(context.Background(), buildImportInput())
 
 	row := findRow(t, output.Rows, "in/album/02.flac")
-	if err != nil || row.Status != "duplicate" || row.Reason != "out/Band - Second.m4a" || len(doubles.publisher.published) != 2 {
+	if err != nil || row.Status != "duplicate" || row.Reason != "out/in/Band - Second.m4a" || len(doubles.publisher.published) != 2 {
 		t.Fatalf("row = %+v published = %d err = %v", row, len(doubles.publisher.published), err)
 	}
 }
@@ -433,7 +433,7 @@ func TestImportService_Import_NumberingAppliedPerDirectory(t *testing.T) {
 	for _, published := range doubles.publisher.published {
 		tracks[published.Target] = published.Metadata.Track
 	}
-	expected := map[string]string{"Band - First (feat. Guest).m4a": "1/2", "Band - Second.m4a": "2/2", "Band - Single.m4a": "1/1"}
+	expected := map[string]string{"in/Band - First (feat. Guest).m4a": "1/2", "in/Band - Second.m4a": "2/2", "in/Band - Single.m4a": "1/1"}
 	if err != nil || fmt.Sprint(tracks) != fmt.Sprint(expected) {
 		t.Fatalf("tracks = %v err = %v", tracks, err)
 	}
@@ -471,7 +471,7 @@ func TestImportService_Preview_ReturnsPlannedTargets_PublisherAndConverterNotCal
 	if err != nil || doubles.converter.calls != 0 || len(doubles.publisher.published) != 0 || doubles.resolver.calls != 1 {
 		t.Fatalf("converter = %d published = %d err = %v", doubles.converter.calls, len(doubles.publisher.published), err)
 	}
-	if row := findRow(t, preview.Rows, "in/album/02.flac"); row.Status != RowStatusPlanned || row.Target != "Band - Second.m4a" {
+	if row := findRow(t, preview.Rows, "in/album/02.flac"); row.Status != RowStatusPlanned || row.Target != "in/Band - Second.m4a" {
 		t.Fatalf("row = %+v", row)
 	}
 	if counts := rowsByStatus(preview.Rows); counts[RowStatusPlanned] != 3 || counts["failed"] != 1 || counts["skipped"] != 1 {

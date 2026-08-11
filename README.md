@@ -78,11 +78,12 @@ Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` 
 ## Output rules
 
 - Format: AAC-LC in `.m4a`, 44.1 kHz, CBR 256 kb/s with FDK-AAC (512 kb/s with the native fallback); AAC sources are copied without re-encoding; the source cover is kept.
+- Folder: each run goes into a folder named after the input folder, for example `music-ops run "D:\Downloads\Rockzin Brabo"` writes `<library>\Rockzin Brabo\...`.
 - Names: `{AlbumArtist} - {Title}.m4a`, or `{AlbumArtist} - {Title} (feat. {Guests}).m4a` when there are guests; invalid characters are removed and long names are shortened.
 - Tags: the title keeps version descriptors such as `(Remix)` or `[Radio Edit]` and drops `feat.` parts; artists are written as `Main; Guest`, the album artist is the main artist.
 - Genres: a main genre and an optional sub-genre from a fixed list, separated by `; ` (for example `Electronic; Dance`, `Rap Nacional`); `desconhecido` when nothing reliable is found.
 - Track numbers: numbered per source folder as `n/total`.
-- Duplicates: the best-quality copy is kept; tracks already in the library are skipped and the library file is left untouched.
+- Duplicates: the best-quality copy is kept; tracks already anywhere in the library (same file name) are skipped and the library file is left untouched.
 - Every run writes a report under `<library>\.music-ops\runs\<run id>\`.
 
 ## Testing

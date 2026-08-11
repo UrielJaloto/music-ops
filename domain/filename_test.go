@@ -103,6 +103,9 @@ func TestNewTargetPath(t *testing.T) {
 		{"FN6_ShortDateKept", TargetPathDetails{Layout: LayoutAlbumFolders, Template: "{year}", Date: "99", FileName: fileName}, "99/Band - Song.m4a", nil},
 		{"FN6_FolderSanitized", TargetPathDetails{Layout: LayoutAlbumFolders, Template: "{album}", Album: "A/B: C.", FileName: fileName}, "AB C/Band - Song.m4a", nil},
 		{"FN6_EmptyTemplate", TargetPathDetails{Layout: LayoutAlbumFolders, Template: "", FileName: fileName}, "Unknown/Band - Song.m4a", nil},
+		{"FN11_FlatInsideInputFolder", TargetPathDetails{Folder: "Rockzin Brabo", Layout: LayoutFlat, FileName: fileName}, "Rockzin Brabo/Band - Song.m4a", nil},
+		{"FN11_AlbumFoldersInsideInputFolder", TargetPathDetails{Folder: "Inbox: 1", Layout: LayoutAlbumFolders, Template: "{album}", Album: "Best", FileName: fileName}, "Inbox 1/Best/Band - Song.m4a", nil},
+		{"FN11_BlankFolderIgnored", TargetPathDetails{Folder: " ", Layout: LayoutFlat, FileName: fileName}, "Band - Song.m4a", nil},
 		{"UnknownPlaceholder_ReturnsError", TargetPathDetails{Layout: LayoutAlbumFolders, Template: "{genre}", FileName: fileName}, "", ErrTemplatePlaceholderUnknown},
 	}
 	for _, testCase := range cases {
