@@ -31,3 +31,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+/dist/
+/bin/
+.music-ops/
+music-ops-out/
