@@ -102,8 +102,11 @@ function Invoke-FuzzSuite {
 function Get-BranchCoverage {
     param([string[]]$Output)
     $line = $Output | Where-Object { $_ -match '(\d+)/(\d+)' } | Select-Object -Last 1
-    if (-not $line -or -not ($line -match '(\d+)/(\d+)') -or [int]$Matches[2] -eq 0) {
+    if (-not $line -or -not ($line -match '(\d+)/(\d+)')) {
         return 0
+    }
+    if ([int]$Matches[2] -eq 0) {
+        return 100
     }
     return [math]::Floor(100 * [int]$Matches[1] / [int]$Matches[2])
 }
