@@ -53,8 +53,9 @@ func (title Title) WithoutFeaturing() (Title, []string) {
 }
 
 func removeBracketedFeaturing(value string) (string, []string) {
-	guests := []string{}
-	for _, match := range bracketedFeaturingPattern.FindAllStringSubmatch(value, -1) {
+	matches := bracketedFeaturingPattern.FindAllStringSubmatch(value, -1)
+	guests := make([]string, 0, len(matches))
+	for _, match := range matches {
 		guests = append(guests, splitGuests(match[1])...)
 	}
 	return bracketedFeaturingPattern.ReplaceAllString(value, " "), guests
