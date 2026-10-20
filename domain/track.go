@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"cmp"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -277,4 +278,48 @@ func formatPosition(number, total int) string {
 		return strconv.Itoa(number)
 	}
 	return strconv.Itoa(number) + positionSeparator + strconv.Itoa(total)
+}
+
+func (track Track) CompareSourceQuality(other Track) int {
+	for _, criterion := range sourceQualityCriteria {
+		if result := criterion(track.source, other.source); result != 0 {
+			return result
+		}
+	}
+	return 0
+}
+
+var sourceQualityCriteria = []func(left, right SourceDetails) int{
+	compareLosslessFamily,
+	compareSampleRate,
+	compareBitDepth,
+	compareDuration,
+	compareSourcePathOrder,
+}
+
+func compareLosslessFamily(left, right SourceDetails) int {
+	return cmp.Compare(losslessRank(left), losslessRank(right))
+}
+
+func losslessRank(source SourceDetails) int {
+	if source.Codec.Family() == FamilyLossless {
+		return 1
+	}
+	return 0
+}
+
+func compareSampleRate(left, right SourceDetails) int {
+	return cmp.Compare(left.Quality.SampleRate(), right.Quality.SampleRate())
+}
+
+func compareBitDepth(left, right SourceDetails) int {
+	return cmp.Compare(left.Quality.BitDepth(), right.Quality.BitDepth())
+}
+
+func compareDuration(left, right SourceDetails) int {
+	return cmp.Compare(left.Quality.Duration(), right.Quality.Duration())
+}
+
+func compareSourcePathOrder(left, right SourceDetails) int {
+	return cmp.Compare(right.RelativePath, left.RelativePath)
 }
