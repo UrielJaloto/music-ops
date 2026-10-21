@@ -113,6 +113,31 @@ func TestMatrixChecker(t *testing.T) {
 	}
 }
 
+func TestServiceReferenceRule(t *testing.T) {
+	servicePackage := types.NewPackage("example/services", "services")
+	structType := types.NewStruct(nil, nil)
+	interfaceType := types.NewInterfaceType(nil, nil)
+	cases := []struct {
+		name     string
+		object   types.Object
+		expected bool
+	}{
+		{"DataTransferStruct_IsAllowed", types.NewTypeName(0, servicePackage, "FoundFiles", structType), false},
+		{"ServiceType_IsForbidden", types.NewTypeName(0, servicePackage, "SourceService", structType), true},
+		{"Interface_IsForbidden", types.NewTypeName(0, servicePackage, "WorkPool", interfaceType), true},
+		{"Constructor_IsForbidden", types.NewFunc(0, servicePackage, "NewSourceService", types.NewSignatureType(nil, nil, nil, nil, nil, false)), true},
+		{"BusinessError_IsAllowed", types.NewVar(0, servicePackage, "ErrFolderMissing", types.Universe.Lookup("error").Type()), false},
+		{"Unexported_IsAllowed", types.NewFunc(0, servicePackage, "wrapError", types.NewSignatureType(nil, nil, nil, nil, nil, false)), false},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := isServiceInternalReference(testCase.object); got != testCase.expected {
+				t.Fatalf("isServiceInternalReference = %v, want %v", got, testCase.expected)
+			}
+		})
+	}
+}
+
 func findViolations(allowed map[string][]string, edges []dependencyEdge) []dependencyEdge {
 	var violations []dependencyEdge
 	for _, edge := range edges {
@@ -226,19 +251,21 @@ func fileEdges(loadedPackage *packages.Package, file *ast.File, fromFile string,
 }
 
 func isServiceInternalReference(object types.Object) bool {
-	if !object.Exported() || isField(object) {
+	if !object.Exported() {
 		return false
 	}
-	return !isDataTransferName(object.Name())
+	switch declared := object.(type) {
+	case *types.Func:
+		return true
+	case *types.TypeName:
+		return isServiceOrInterface(declared)
+	}
+	return false
 }
 
-func isField(object types.Object) bool {
-	variable, isVariable := object.(*types.Var)
-	return isVariable && variable.IsField()
-}
-
-func isDataTransferName(name string) bool {
-	return strings.HasSuffix(name, "Input") || strings.HasSuffix(name, "Output")
+func isServiceOrInterface(declared *types.TypeName) bool {
+	_, isInterface := declared.Type().Underlying().(*types.Interface)
+	return isInterface || strings.HasSuffix(declared.Name(), "Service")
 }
 
 func domainContext(t *testing.T, fileName string) string {
