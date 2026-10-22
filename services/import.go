@@ -25,6 +25,7 @@ const (
 	parallelImportTasks  = 2
 	convertTaskIndex     = 0
 	skippedNotAudio      = "not an audio file"
+	skippedPublished     = "already published"
 	RowStatusPlanned     = "planned"
 	importPathSeparator  = "/"
 	windowsPathDelimiter = "\\"
@@ -54,6 +55,7 @@ type MetadataResolver interface {
 }
 
 type TrackPublisher interface {
+	FindPublished(ctx context.Context, input FindPublishedInput) (PublishedTracks, error)
 	Admit(ctx context.Context, input AdmitInput) (AdmittedTracks, error)
 	Publish(ctx context.Context, input PublishInput) (PublishOutput, error)
 }
@@ -127,6 +129,9 @@ func NewImportService(sources SourceDiscoverer, converter TrackConverter, resolv
 func (service ImportService) Import(ctx context.Context, input ImportInput) (ImportOutput, error) {
 	session, err := service.start(ctx, input)
 	if err != nil {
+		return ImportOutput{}, err
+	}
+	if err := service.skipPublished(ctx, session, input.Output); err != nil {
 		return ImportOutput{}, err
 	}
 	if err := service.convertAndResolve(ctx, session, input); err != nil {
@@ -204,6 +209,24 @@ func validateImportFolders(input ImportInput) error {
 func normalizedFolder(folder string) string {
 	unified := strings.ReplaceAll(strings.TrimSpace(folder), windowsPathDelimiter, importPathSeparator)
 	return strings.ToLower(strings.TrimRight(unified, importPathSeparator))
+}
+
+func (service ImportService) skipPublished(ctx context.Context, session *importSession, output string) error {
+	pending := session.pendingTracks()
+	ids := make([]domain.TrackID, 0, len(pending))
+	for _, track := range pending {
+		ids = append(ids, track.ID())
+	}
+	published, err := service.publisher.FindPublished(ctx, FindPublishedInput{Output: output, IDs: ids})
+	if err != nil {
+		return fmt.Errorf("finding published tracks: %w", err)
+	}
+	for _, track := range pending {
+		if _, isPublished := published.Targets[track.ID()]; isPublished {
+			session.skipTrack(track, skippedPublished)
+		}
+	}
+	return nil
 }
 
 type importResults struct {
@@ -429,6 +452,12 @@ func (session *importSession) resolvedTracks() []*domain.Track {
 		}
 	}
 	return resolved
+}
+
+func (session *importSession) skipTrack(track *domain.Track, reason string) {
+	if err := track.Skip(reason); err != nil {
+		session.run.Warn(fmt.Sprintf("skip: %s: %v", track.Source().Path, err))
+	}
 }
 
 func (session *importSession) failGroup(group domain.AlbumGroup, err error) {

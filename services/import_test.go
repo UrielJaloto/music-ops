@@ -66,6 +66,9 @@ func (fake *resolverFake) Resolve(_ context.Context, input ResolveMetadataInput)
 }
 
 type publisherFake struct {
+	findErr        error
+	cancelAfter    int
+	cancel         context.CancelFunc
 	libraryTargets map[string]bool
 	failing        map[domain.TrackID]bool
 	fatalAfter     int
@@ -76,7 +79,24 @@ type publisherFake struct {
 }
 
 func newPublisherFake() *publisherFake {
-	return &publisherFake{libraryTargets: map[string]bool{}, failing: map[domain.TrackID]bool{}, fatalAfter: -1, journal: map[domain.TrackID]string{}}
+	return newPublisherFakeWithJournal(map[domain.TrackID]string{})
+}
+
+func newPublisherFakeWithJournal(journal map[domain.TrackID]string) *publisherFake {
+	return &publisherFake{libraryTargets: map[string]bool{}, failing: map[domain.TrackID]bool{}, fatalAfter: -1, cancelAfter: -1, journal: journal}
+}
+
+func (fake *publisherFake) FindPublished(_ context.Context, input FindPublishedInput) (PublishedTracks, error) {
+	if fake.findErr != nil {
+		return PublishedTracks{}, fake.findErr
+	}
+	published := PublishedTracks{Targets: map[domain.TrackID]string{}}
+	for _, id := range input.IDs {
+		if target, found := fake.journal[id]; found {
+			published.Targets[id] = target
+		}
+	}
+	return published, nil
 }
 
 func (fake *publisherFake) Admit(_ context.Context, input AdmitInput) (AdmittedTracks, error) {
@@ -110,6 +130,9 @@ func (fake *publisherFake) Publish(ctx context.Context, input PublishInput) (Pub
 	fake.writes++
 	fake.published = append(fake.published, input.Track)
 	fake.journal[input.Track.ID] = input.Track.Target
+	if fake.cancelAfter >= 0 && fake.writes >= fake.cancelAfter {
+		fake.cancel()
+	}
 	return PublishOutput{Status: PublishStatusPublished}, nil
 }
 
@@ -335,6 +358,7 @@ func TestImportService_Import_InfrastructureErrors(t *testing.T) {
 		{name: "AdmitError_ReturnsWrappedError", arrange: func(doubles *importDoubles) { doubles.publisher.admitErr = errTechnical }},
 		{name: "RunIDError_ReturnsWrappedError", arrange: func(doubles *importDoubles) { doubles.runtime.idErr = errTechnical }},
 		{name: "FatalPublishError_ReturnsWrappedError", arrange: func(doubles *importDoubles) { doubles.publisher.fatalAfter = 0 }},
+		{name: "FindPublishedError_ReturnsWrappedError", arrange: func(doubles *importDoubles) { doubles.publisher.findErr = errTechnical }},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -476,5 +500,78 @@ func TestImportService_Preview_Errors(t *testing.T) {
 				t.Fatalf("error = %v", err)
 			}
 		})
+	}
+}
+
+func TestImportService_SecondRun_WritesNothing(t *testing.T) {
+	doubles := newImportDoubles(t)
+	_, err := doubles.service().Import(context.Background(), importInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := newImportDoubles(t)
+	second.publisher = newPublisherFakeWithJournal(doubles.publisher.journal)
+	for _, published := range doubles.publisher.published {
+		second.publisher.libraryTargets[published.Target] = true
+	}
+
+	output, err := second.service().Import(context.Background(), importInput())
+
+	if err != nil || second.converter.calls != 1 || second.publisher.writes != 0 {
+		t.Fatalf("converter calls = %d writes = %d err = %v", second.converter.calls, second.publisher.writes, err)
+	}
+	if output.Counts != (domain.RunCounts{Skipped: 4, Failed: 1, Total: 5}) {
+		t.Fatalf("counts = %+v", output.Counts)
+	}
+	if row := findRow(t, output.Rows, "in/album/01.flac"); row.Status != "skipped" || row.Reason != "already published" {
+		t.Fatalf("row = %+v", row)
+	}
+}
+
+func TestImportService_SecondRun_ConvertsNothing(t *testing.T) {
+	doubles := newImportDoubles(t)
+	doubles.publisher.journal = map[domain.TrackID]string{"a1": "x", "a2": "y", "b1": "z"}
+
+	_, err := doubles.service().Import(context.Background(), importInput())
+
+	if err != nil || doubles.converter.calls != 1 || doubles.publisher.writes != 0 {
+		t.Fatalf("calls = %d writes = %d err = %v", doubles.converter.calls, doubles.publisher.writes, err)
+	}
+}
+
+func TestImportService_ResumeAfterCrash_PublishesRemainingOnce(t *testing.T) {
+	journal := map[domain.TrackID]string{}
+	first := newImportDoubles(t)
+	first.publisher = newPublisherFakeWithJournal(journal)
+	first.publisher.fatalAfter = 1
+
+	_, err := first.service().Import(context.Background(), importInput())
+	if !errors.Is(err, errTechnical) || first.publisher.writes != 1 {
+		t.Fatalf("first run err = %v writes = %d", err, first.publisher.writes)
+	}
+	second := newImportDoubles(t)
+	second.publisher = newPublisherFakeWithJournal(journal)
+
+	output, err := second.service().Import(context.Background(), importInput())
+
+	if err != nil || second.publisher.writes != 2 || output.Counts.Published != 2 || output.Counts.Skipped != 2 {
+		t.Fatalf("second run writes = %d counts = %+v err = %v", second.publisher.writes, output.Counts, err)
+	}
+	if len(journal) != 3 {
+		t.Fatalf("journal = %v", journal)
+	}
+}
+
+func TestImportService_CancelMidPublish_ReturnsContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	doubles := newImportDoubles(t)
+	doubles.publisher.cancelAfter = 1
+	doubles.publisher.cancel = cancel
+
+	_, err := doubles.service().Import(ctx, importInput())
+
+	if !errors.Is(err, context.Canceled) || len(doubles.publisher.journal) != 1 || len(doubles.publisher.published) != 1 {
+		t.Fatalf("err = %v journal = %v published = %d", err, doubles.publisher.journal, len(doubles.publisher.published))
 	}
 }
