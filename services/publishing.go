@@ -104,6 +104,15 @@ type PublishOutput struct {
 	Destination string
 }
 
+type FindPublishedInput struct {
+	Output string
+	IDs    []domain.TrackID
+}
+
+type PublishedTracks struct {
+	Targets map[domain.TrackID]string
+}
+
 type PublishingService struct {
 	library   LibraryReader
 	finalizer TrackFinalizer
@@ -176,8 +185,26 @@ func toAdmittedTracks(tracks []*domain.Track) AdmittedTracks {
 	return admitted
 }
 
+func (service PublishingService) FindPublished(ctx context.Context, input FindPublishedInput) (PublishedTracks, error) {
+	published := PublishedTracks{Targets: map[domain.TrackID]string{}}
+	for _, id := range input.IDs {
+		target, isPublished, err := service.journal.IsPublished(ctx, id)
+		if err != nil {
+			return PublishedTracks{}, fmt.Errorf("reading publishing journal: %w", err)
+		}
+		if isPublished && service.mover.Exists(destinationOf(input.Output, target)) {
+			published.Targets[id] = target
+		}
+	}
+	return published, nil
+}
+
+func destinationOf(output, target string) string {
+	return strings.TrimRight(output, "/\\") + outputPathSeparator + target
+}
+
 func (service PublishingService) Publish(ctx context.Context, input PublishInput) (PublishOutput, error) {
-	destination := strings.TrimRight(input.Output, "/\\") + outputPathSeparator + input.Track.Target
+	destination := destinationOf(input.Output, input.Track.Target)
 	_, isPublished, err := service.journal.IsPublished(ctx, input.Track.ID)
 	if err != nil {
 		return failedPublish(PublishStageJournal, err, destination), nil
