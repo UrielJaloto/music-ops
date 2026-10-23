@@ -1,0 +1,22 @@
+output:
+  dir: 'D:\Music'
+  layout: flat
+  album_template: "{albumartist} - {album}"
+encoder:
+  fdk_library: 'C:\Program Files\freac\codecs\FDK-AAC.dll'
+  ffmpeg: ""
+  ffprobe: ""
+  workers: 0
+lastfm:
+  api_key: ""
+  base_url: "https://ws.audioscrobbler.com/2.0/"
+advisor:
+  llama_server: ""
+  model_file: ""
+  port: 8089
+  batch_size: 40
+numbering:
+  mode: per_directory
+watch:
+  inbox: ""
+  settle: 20s
