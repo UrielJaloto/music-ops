@@ -2,8 +2,11 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
+
+var ErrFFmpegMissing = errors.New("ffmpeg was not found; install it with: winget install -e --id Gyan.FFmpeg")
 
 const (
 	MinimumFreeBytes   uint64 = 2 << 30
