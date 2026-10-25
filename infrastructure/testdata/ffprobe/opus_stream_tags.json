@@ -1,0 +1,6 @@
+{
+  "streams": [
+    {"index": 0, "codec_name": "opus", "codec_type": "audio", "sample_fmt": "fltp", "sample_rate": "48000", "channels": 2, "duration": "61.000000", "disposition": {"attached_pic": 0}, "tags": {"TITLE": "Stream Title", "ARTIST": "Stream Artist", "YEAR": "2020", "tracknumber": "2", "totaltracks": "9"}}
+  ],
+  "format": {"duration": "61.000000", "bit_rate": "128000", "tags": {"TITLE": "Format Title", "encoder": "Lavf"}}
+}

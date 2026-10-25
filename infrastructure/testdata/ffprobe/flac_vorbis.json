@@ -1,0 +1,7 @@
+{
+  "streams": [
+    {"index": 0, "codec_name": "flac", "codec_type": "audio", "sample_fmt": "s32", "sample_rate": "96000", "channels": 2, "bits_per_raw_sample": "24", "duration": "215.400000", "disposition": {"attached_pic": 0}},
+    {"index": 1, "codec_name": "png", "codec_type": "video", "disposition": {"attached_pic": 1}, "tags": {"comment": "Cover (front)"}}
+  ],
+  "format": {"duration": "215.400000", "bit_rate": "2950000", "tags": {"TITLE": "Bencao (feat. Guest)", "ARTIST": "Main Artist", "ALBUMARTIST": "Main Artist", "ALBUM": "The Album", "DATE": "2019", "TRACKNUMBER": "3", "TRACKTOTAL": "12", "DISCNUMBER": "1", "DISCTOTAL": "2", "COMPOSER": "Writer", "COPYRIGHT": "2019 Label"}}
+}

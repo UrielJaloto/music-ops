@@ -1,0 +1,7 @@
+{
+  "streams": [
+    {"index": 0, "codec_name": "mp3", "codec_type": "audio", "sample_fmt": "fltp", "sample_rate": "48000", "channels": 2, "bit_rate": "320000", "duration": "N/A", "disposition": {"attached_pic": 0}},
+    {"index": 1, "codec_name": "mjpeg", "codec_type": "video", "disposition": {"attached_pic": 1}}
+  ],
+  "format": {"duration": "200.500000", "bit_rate": "321000", "tags": {"title": "Mp3 Song", "artist": "Mp3 Artist", "album artist": "Various", "album": "Hits", "TYER": "ignored", "date": "2001", "track": "07/15", "disc": "2/3"}}
+}

@@ -1,0 +1,7 @@
+{
+  "streams": [
+    {"index": 0, "codec_name": "aac", "codec_type": "audio", "sample_fmt": "fltp", "sample_rate": "44100", "channels": 2, "bits_per_sample": 0, "bit_rate": "256000", "duration": "180.023220", "disposition": {"attached_pic": 0}, "tags": {"handler_name": "SoundHandler"}},
+    {"index": 1, "codec_name": "mjpeg", "codec_type": "video", "disposition": {"attached_pic": 1}}
+  ],
+  "format": {"duration": "180.023220", "bit_rate": "262000", "tags": {"title": "Song", "artist": "Artist", "album_artist": "Artist", "album": "Favorites", "track": "5/50", "disc": "1/1", "date": "2024", "genre": "Rock"}}
+}
