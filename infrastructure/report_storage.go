@@ -26,7 +26,7 @@ func (storage ReportStorage) Create(ctx context.Context, runID, name string) (io
 	if err := os.MkdirAll(folder, stagingFolderPermission); err != nil {
 		return nil, fmt.Errorf("creating report folder: %w", err)
 	}
-	file, err := os.OpenFile(filepath.Join(folder, filepath.Base(name)), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, stagingFilePermission)
+	file, err := os.OpenFile(filepath.Clean(filepath.Join(folder, filepath.Base(name))), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, stagingFilePermission)
 	if err != nil {
 		return nil, fmt.Errorf("creating report %s: %w", name, err)
 	}

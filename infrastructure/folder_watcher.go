@@ -90,7 +90,7 @@ type arrivalLoop struct {
 
 func (loop *arrivalLoop) run(ctx context.Context) {
 	defer close(loop.output)
-	defer loop.notifier.Close()
+	defer func() { _ = loop.notifier.Close() }()
 	if hasLooseAudio(loop.inbox) {
 		loop.looseTimer = loop.watcher.clock.After(loop.watcher.looseQuiet)
 	}

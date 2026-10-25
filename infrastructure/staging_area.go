@@ -110,7 +110,7 @@ func copyFile(source, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { _ = input.Close() }()
 	output, err := os.OpenFile(filepath.Clean(destination), os.O_CREATE|os.O_EXCL|os.O_WRONLY, stagingFilePermission)
 	if err != nil {
 		return err

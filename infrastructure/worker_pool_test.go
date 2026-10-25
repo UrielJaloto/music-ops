@@ -16,21 +16,21 @@ import (
 
 func TestWorkerPool_RunParallel_HonorsLimit(t *testing.T) {
 	cases := []struct {
-		limit int
-		size  int
+		limit int32
+		size  int32
 	}{
 		{limit: 1, size: 8},
 		{limit: 2, size: 8},
 		{limit: 4, size: 3},
 	}
 	for _, testCase := range cases {
-		t.Run("Limit"+strconv.Itoa(testCase.limit), func(t *testing.T) {
+		t.Run("Limit"+strconv.Itoa(int(testCase.limit)), func(t *testing.T) {
 			var running, peak, done atomic.Int32
 			gate := make(chan struct{})
 			release := sync.OnceFunc(func() { close(gate) })
-			expectedPeak := int32(min(testCase.limit, testCase.size))
+			expectedPeak := min(testCase.limit, testCase.size)
 
-			err := NewWorkerPool(testCase.limit).RunParallel(context.Background(), testCase.size, func(context.Context, int) error {
+			err := NewWorkerPool(int(testCase.limit)).RunParallel(context.Background(), int(testCase.size), func(context.Context, int) error {
 				current := running.Add(1)
 				recordPeak(&peak, current)
 				if current == expectedPeak {
@@ -42,7 +42,7 @@ func TestWorkerPool_RunParallel_HonorsLimit(t *testing.T) {
 				return nil
 			})
 
-			if err != nil || peak.Load() != expectedPeak || done.Load() != int32(testCase.size) {
+			if err != nil || peak.Load() != expectedPeak || done.Load() != testCase.size {
 				t.Fatalf("peak = %d done = %d err = %v", peak.Load(), done.Load(), err)
 			}
 		})
