@@ -74,8 +74,12 @@ func assertPublishableAudio(t *testing.T, path string, expectedBitrate, expected
 	if len(boxes) < 3 || boxes[0] != "ftyp" || boxes[1] != "moov" || boxes[2] != "mdat" {
 		t.Fatalf("boxes = %v, want ftyp moov mdat (fast start)", boxes)
 	}
-	stream := firstAudioStream(t, probeFixture(t, path))
+	probed := probeFixture(t, path)
+	stream := firstAudioStream(t, probed)
 	bitrate, _ := strconv.Atoi(stream.BitRate)
+	if containerDuration := secondsToDuration(probed.Format.Duration); (containerDuration - duration).Abs() > 20*time.Millisecond {
+		t.Fatalf("container duration = %v, want %v", containerDuration, duration)
+	}
 	if stream.CodecName != "aac" || stream.Profile != "LC" || stream.SampleRate != "44100" || stream.Channels != expectedChannels {
 		t.Fatalf("stream = %+v", stream)
 	}
