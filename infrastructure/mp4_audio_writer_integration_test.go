@@ -64,3 +64,26 @@ func TestMP4AudioWriter_FDKFramesPlayable(t *testing.T) {
 		t.Fatal("temporary files left behind")
 	}
 }
+
+func TestMP4AudioWriter_EditListSkipsPriming(t *testing.T) {
+	ffmpeg, _ := requireFFmpeg(t)
+	path := filepath.Join(t.TempDir(), "sine.audio.m4a")
+	encodeSineToMP4(t, path, 1.0)
+
+	pcm, err := exec.CommandContext(context.Background(), ffmpeg, "-v", "error", "-i", path, "-ac", "1", "-f", "s16le", "-").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	start := 4410
+	var errorEnergy, signalEnergy float64
+	for index := start; index < start+441; index++ {
+		decoded := float64(int16(uint16(pcm[2*index]) | uint16(pcm[2*index+1])<<8))
+		expected := 8000 * math.Sin(2*math.Pi*440*float64(index)/44100)
+		errorEnergy += (decoded - expected) * (decoded - expected)
+		signalEnergy += expected * expected
+	}
+	if ratio := math.Sqrt(errorEnergy / signalEnergy); ratio > 0.1 {
+		t.Fatalf("decoded audio is misaligned: relative error %.3f", ratio)
+	}
+}
