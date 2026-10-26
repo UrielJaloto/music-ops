@@ -1,0 +1,11 @@
+ffmpeg version 6.0 Copyright (c) 2000-2023 the FFmpeg developers
+built with gcc 9.2.0 (tdm64-1)
+configuration: --disable-autodetect --disable-doc --enable-gpl --enable-small --enable-runtime-cpudetect
+libavutil      58.  2.100 / 58.  2.100
+libavcodec     60.  3.100 / 60.  3.100
+libavformat    60.  3.100 / 60.  3.100
+libavdevice    60.  1.100 / 60.  1.100
+libavfilter     9.  3.100 /  9.  3.100
+libswscale      7.  1.100 /  7.  1.100
+libswresample   4. 10.100 /  4. 10.100
+libpostproc    57.  1.100 / 57.  1.100

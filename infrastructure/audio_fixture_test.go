@@ -239,6 +239,8 @@ func copyFixture(t *testing.T, source, target string) {
 type probedStream struct {
 	CodecType     string            `json:"codec_type"`
 	CodecName     string            `json:"codec_name"`
+	Profile       string            `json:"profile"`
+	BitRate       string            `json:"bit_rate"`
 	SampleRate    string            `json:"sample_rate"`
 	Channels      int               `json:"channels"`
 	BitsPerSample string            `json:"bits_per_raw_sample"`

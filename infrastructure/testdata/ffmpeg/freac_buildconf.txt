@@ -1,0 +1,7 @@
+
+  configuration:
+    --disable-autodetect
+    --disable-doc
+    --enable-gpl
+    --enable-small
+    --enable-runtime-cpudetect
