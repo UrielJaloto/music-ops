@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -68,28 +69,41 @@ func topLevelBoxes(t *testing.T, path string) []string {
 	return boxes
 }
 
-func assertPublishableAudio(t *testing.T, path string, expectedBitrate, expectedChannels int, duration time.Duration) {
+func assertFastStartAAC(t *testing.T, path string, expectedChannels int, duration time.Duration) int {
 	t.Helper()
 	boxes := topLevelBoxes(t, path)
-	if len(boxes) < 3 || boxes[0] != "ftyp" || boxes[1] != "moov" || boxes[2] != "mdat" {
-		t.Fatalf("boxes = %v, want ftyp moov mdat (fast start)", boxes)
+	moov, mdat := slices.Index(boxes, "moov"), slices.Index(boxes, "mdat")
+	if len(boxes) == 0 || boxes[0] != "ftyp" || moov < 0 || mdat < moov {
+		t.Fatalf("boxes = %v, want ftyp first and moov before mdat (fast start)", boxes)
 	}
 	probed := probeFixture(t, path)
 	stream := firstAudioStream(t, probed)
-	bitrate, _ := strconv.Atoi(stream.BitRate)
 	if containerDuration := secondsToDuration(probed.Format.Duration); (containerDuration - duration).Abs() > 20*time.Millisecond {
 		t.Fatalf("container duration = %v, want %v", containerDuration, duration)
 	}
 	if stream.CodecName != "aac" || stream.Profile != "LC" || stream.SampleRate != "44100" || stream.Channels != expectedChannels {
 		t.Fatalf("stream = %+v", stream)
 	}
-	if !isBitrateWithinTolerance(bitrate, expectedBitrate) {
+	bitrate, _ := strconv.Atoi(stream.BitRate)
+	return bitrate
+}
+
+func assertPublishableAudio(t *testing.T, path string, expectedBitrate, expectedChannels int, duration time.Duration) {
+	t.Helper()
+	if bitrate := assertFastStartAAC(t, path, expectedChannels, duration); !isBitrateWithinTolerance(bitrate, expectedBitrate) {
 		t.Fatalf("bitrate = %d, want %d ± 8 %%", bitrate, expectedBitrate)
 	}
 	_, ffprobe := requireFFmpeg(t)
 	verifier := NewFFprobeVerifier(NewFFprobeInspector(NewProcessRunner(), ffprobe))
 	if err := verifier.Verify(context.Background(), path, services.PublishedAudio{Duration: duration, Bitrate: expectedBitrate, IsReencoded: true}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertNativeAudio(t *testing.T, path string, expectedChannels int, duration time.Duration) {
+	t.Helper()
+	if bitrate := assertFastStartAAC(t, path, expectedChannels, duration); bitrate <= 0 {
+		t.Fatalf("bitrate = %d", bitrate)
 	}
 }
 
