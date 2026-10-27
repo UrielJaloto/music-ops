@@ -117,3 +117,21 @@ func mustClassification(t *testing.T, details ClassificationDetails) Classificat
 	}
 	return classification
 }
+
+func TestNationalOnlyGenreNames(t *testing.T) {
+	names := NationalOnlyGenreNames()
+
+	if len(names) != 4 || names[0] != "Funk BR" || names[1] != "MPB" || names[2] != "Samba" || names[3] != "Pagode" {
+		t.Fatalf("names = %v", names)
+	}
+}
+
+func TestGenreSubgenres(t *testing.T) {
+	subgenres := GenreSubgenres()
+	subgenres["Rock"][0] = "changed"
+
+	fresh := GenreSubgenres()
+	if len(fresh) != 4 || len(fresh["Rock"]) != 2 || fresh["Rock"][0] != "Metal" || len(fresh["Funk BR"]) != 4 || len(fresh["Electronic"]) != 3 || len(fresh["Rap"]) != 1 {
+		t.Fatalf("subgenres = %v", fresh)
+	}
+}

@@ -74,6 +74,26 @@ func GenreHints() map[string]string {
 	return hints
 }
 
+func NationalOnlyGenreNames() []string {
+	names := []string{}
+	for _, definition := range genrePool {
+		if definition.isNationalOnly {
+			names = append(names, definition.name)
+		}
+	}
+	return names
+}
+
+func GenreSubgenres() map[string][]string {
+	subgenres := map[string][]string{}
+	for _, definition := range genrePool {
+		if len(definition.subgenres) > 0 {
+			subgenres[definition.name] = append([]string{}, definition.subgenres...)
+		}
+	}
+	return subgenres
+}
+
 type ClassificationDetails struct {
 	Genre       string
 	Subgenre    string

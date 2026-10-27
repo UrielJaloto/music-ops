@@ -1,0 +1,75 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "genre": {
+            "enum": [
+              "Rock",
+              "Indie / Alternative",
+              "Pop",
+              "Hip-Hop",
+              "Rap",
+              "R\u0026B / Soul",
+              "Electronic",
+              "Jazz / Blues",
+              "Funk",
+              "Fonk",
+              "Reggae",
+              "Reggaeton",
+              "Country / Folk",
+              "Classical",
+              "Acoustic",
+              "Soundtrack",
+              "Funk BR",
+              "MPB",
+              "Samba",
+              "Pagode"
+            ],
+            "type": "string"
+          },
+          "is_brazilian": {
+            "type": "boolean"
+          },
+          "is_known": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "subgenre": {
+            "enum": [
+              "Metal",
+              "Punk",
+              "Rap Acústico",
+              "Dance",
+              "House",
+              "Ambient",
+              "Funk Carioca",
+              "Melódico",
+              "Remix",
+              "Afrobeats",
+              ""
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "genre",
+          "subgenre",
+          "is_brazilian",
+          "is_known"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "type": "object"
+}
