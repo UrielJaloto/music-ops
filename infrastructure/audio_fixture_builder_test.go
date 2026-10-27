@@ -21,7 +21,7 @@ func firstAudioStream(t *testing.T, probed probedFile) probedStream {
 
 func hasCoverStream(probed probedFile) bool {
 	for _, stream := range probed.Streams {
-		if stream.CodecType == "video" {
+		if stream.CodecType == "video" && stream.Disposition.AttachedPic == 1 {
 			return true
 		}
 	}

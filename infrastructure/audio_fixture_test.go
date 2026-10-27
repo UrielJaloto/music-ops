@@ -245,6 +245,9 @@ type probedStream struct {
 	Channels      int               `json:"channels"`
 	BitsPerSample string            `json:"bits_per_raw_sample"`
 	Tags          map[string]string `json:"tags"`
+	Disposition   struct {
+		AttachedPic int `json:"attached_pic"`
+	} `json:"disposition"`
 }
 
 type probedFile struct {
