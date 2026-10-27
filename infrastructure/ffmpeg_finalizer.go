@@ -52,11 +52,23 @@ func coverArguments(cover domain.CoverArt) []string {
 	return append(arguments, "-disposition:v:0", "attached_pic")
 }
 
+type metadataField struct {
+	key   string
+	value string
+}
+
 func metadataArguments(metadata domain.TrackMetadata) []string {
-	fields := []struct{ key, value string }{
-		{"title", metadata.Title}, {"artist", metadata.Artist}, {"album_artist", metadata.AlbumArtist},
-		{"album", metadata.Album}, {"genre", metadata.Genre}, {"track", metadata.Track}, {"disc", metadata.Disc},
-		{"date", metadata.Date}, {"composer", metadata.Composer}, {"copyright", metadata.Copyright},
+	fields := []metadataField{
+		{key: "title", value: metadata.Title},
+		{key: "artist", value: metadata.Artist},
+		{key: "album_artist", value: metadata.AlbumArtist},
+		{key: "album", value: metadata.Album},
+		{key: "genre", value: metadata.Genre},
+		{key: "track", value: metadata.Track},
+		{key: "disc", value: metadata.Disc},
+		{key: "date", value: metadata.Date},
+		{key: "composer", value: metadata.Composer},
+		{key: "copyright", value: metadata.Copyright},
 	}
 	arguments := []string{}
 	for _, field := range fields {

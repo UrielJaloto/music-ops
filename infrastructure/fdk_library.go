@@ -3,11 +3,22 @@ package infrastructure
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 const pcmSampleBytes = 2
 
 var ErrFDKUnavailable = errors.New("FDK-AAC library is unavailable")
+
+func clampInt32(value int) int32 {
+	if value > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	if value < math.MinInt32 {
+		return math.MinInt32
+	}
+	return int32(value)
+}
 
 type FDKSettings struct {
 	SampleRate int

@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -65,7 +66,7 @@ func (writer *MP4AudioWriter) WriteFrame(frame []byte) error {
 	if _, err := writer.mdat.Write(frame); err != nil {
 		return fmt.Errorf("writing audio frame: %w", err)
 	}
-	writer.sampleSizes = append(writer.sampleSizes, uint32(len(frame)))
+	writer.sampleSizes = append(writer.sampleSizes, clampUint32(int64(len(frame))))
 	writer.mdatBytes += uint64(len(frame))
 	return nil
 }
@@ -148,21 +149,32 @@ func (writer *MP4AudioWriter) header(sourceSamples int64) ([]byte, error) {
 func mdatHeader(payload uint64) []byte {
 	if payload+mp4MdatHeaderSize > math.MaxUint32 {
 		header := []byte{0, 0, 0, 1, 'm', 'd', 'a', 't', 0, 0, 0, 0, 0, 0, 0, 0}
-		putUint64(header[8:], payload+mp4LargeMdatHeader)
+		binary.BigEndian.PutUint64(header[8:], payload+mp4LargeMdatHeader)
 		return header
 	}
 	header := []byte{0, 0, 0, 0, 'm', 'd', 'a', 't'}
-	putUint32(header, uint32(payload+mp4MdatHeaderSize))
+	binary.BigEndian.PutUint32(header, clampUint32(int64(payload+mp4MdatHeaderSize)))
 	return header
 }
 
-func putUint32(target []byte, value uint32) {
-	target[0], target[1], target[2], target[3] = byte(value>>24), byte(value>>16), byte(value>>8), byte(value)
+func clampUint32(value int64) uint32 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(value)
 }
 
-func putUint64(target []byte, value uint64) {
-	putUint32(target, uint32(value>>32))
-	putUint32(target[4:], uint32(value))
+func clampUint16(value int) uint16 {
+	if value < 0 {
+		return 0
+	}
+	if value > math.MaxUint16 {
+		return math.MaxUint16
+	}
+	return uint16(value)
 }
 
 type mp4Layout struct {
@@ -181,7 +193,7 @@ func (layout mp4Layout) marshal() ([]byte, error) {
 		CompatibleBrands: []mp4.CompatibleBrandElem{{CompatibleBrand: [4]byte{'M', '4', 'A', ' '}}, {CompatibleBrand: [4]byte{'m', 'p', '4', '2'}}, {CompatibleBrand: [4]byte{'i', 's', 'o', 'm'}}},
 	})
 	composer.start(mp4.BoxTypeMoov())
-	composer.leaf(mp4.BoxTypeMvhd(), &mp4.Mvhd{Timescale: mp4Timescale, DurationV0: uint32(layout.sourceSamples), Rate: mp4FixedPointOne, Volume: mp4UnityVolume, Matrix: mp4Matrix, NextTrackID: mp4TrackID + 1})
+	composer.leaf(mp4.BoxTypeMvhd(), &mp4.Mvhd{Timescale: mp4Timescale, DurationV0: clampUint32(layout.sourceSamples), Rate: mp4FixedPointOne, Volume: mp4UnityVolume, Matrix: mp4Matrix, NextTrackID: mp4TrackID + 1})
 	layout.writeTrack(composer)
 	composer.end()
 	if composer.err != nil {
@@ -192,12 +204,12 @@ func (layout mp4Layout) marshal() ([]byte, error) {
 
 func (layout mp4Layout) writeTrack(composer *boxComposer) {
 	composer.start(mp4.BoxTypeTrak())
-	composer.leaf(mp4.BoxTypeTkhd(), &mp4.Tkhd{FullBox: mp4.FullBox{Flags: [3]byte{0, 0, 7}}, TrackID: mp4TrackID, DurationV0: uint32(layout.sourceSamples), Volume: mp4UnityVolume, Matrix: mp4Matrix})
+	composer.leaf(mp4.BoxTypeTkhd(), &mp4.Tkhd{FullBox: mp4.FullBox{Flags: [3]byte{0, 0, 7}}, TrackID: mp4TrackID, DurationV0: clampUint32(layout.sourceSamples), Volume: mp4UnityVolume, Matrix: mp4Matrix})
 	composer.start(mp4.BoxTypeEdts())
-	composer.leaf(mp4.BoxTypeElst(), &mp4.Elst{EntryCount: 1, Entries: []mp4.ElstEntry{{SegmentDurationV0: uint32(layout.sourceSamples), MediaTimeV0: int32(layout.track.EncoderDelay), MediaRateInteger: 1}}})
+	composer.leaf(mp4.BoxTypeElst(), &mp4.Elst{EntryCount: 1, Entries: []mp4.ElstEntry{{SegmentDurationV0: clampUint32(layout.sourceSamples), MediaTimeV0: clampInt32(layout.track.EncoderDelay), MediaRateInteger: 1}}})
 	composer.end()
 	composer.start(mp4.BoxTypeMdia())
-	composer.leaf(mp4.BoxTypeMdhd(), &mp4.Mdhd{Timescale: mp4Timescale, DurationV0: uint32(len(layout.sampleSizes) * mp4SamplesPerFrame), Language: [3]byte{'u' - 0x60, 'n' - 0x60, 'd' - 0x60}})
+	composer.leaf(mp4.BoxTypeMdhd(), &mp4.Mdhd{Timescale: mp4Timescale, DurationV0: clampUint32(int64(len(layout.sampleSizes)) * mp4SamplesPerFrame), Language: [3]byte{'u' - 0x60, 'n' - 0x60, 'd' - 0x60}})
 	composer.leaf(mp4.BoxTypeHdlr(), &mp4.Hdlr{HandlerType: [4]byte{'s', 'o', 'u', 'n'}, Name: "SoundHandler"})
 	composer.start(mp4.BoxTypeMinf())
 	composer.leaf(mp4.BoxTypeSmhd(), &mp4.Smhd{})
@@ -218,7 +230,7 @@ func writeDataInformation(composer *boxComposer) {
 }
 
 func (layout mp4Layout) writeSampleTable(composer *boxComposer) {
-	sampleCount := uint32(len(layout.sampleSizes))
+	sampleCount := clampUint32(int64(len(layout.sampleSizes)))
 	composer.start(mp4.BoxTypeStbl())
 	layout.writeSampleDescription(composer)
 	composer.leaf(mp4.BoxTypeStts(), &mp4.Stts{EntryCount: 1, Entries: []mp4.SttsEntry{{SampleCount: sampleCount, SampleDelta: mp4SamplesPerFrame}}})
@@ -227,7 +239,7 @@ func (layout mp4Layout) writeSampleTable(composer *boxComposer) {
 	if layout.useLargeOffsets {
 		composer.leaf(mp4.BoxTypeCo64(), &mp4.Co64{EntryCount: 1, ChunkOffset: []uint64{layout.chunkOffset}})
 	} else {
-		composer.leaf(mp4.BoxTypeStco(), &mp4.Stco{EntryCount: 1, ChunkOffset: []uint32{uint32(layout.chunkOffset)}})
+		composer.leaf(mp4.BoxTypeStco(), &mp4.Stco{EntryCount: 1, ChunkOffset: []uint32{clampUint32(int64(min(layout.chunkOffset, math.MaxUint32)))}})
 	}
 	composer.end()
 }
@@ -238,7 +250,7 @@ func (layout mp4Layout) writeSampleDescription(composer *boxComposer) {
 	composer.start(mp4.BoxTypeMp4a())
 	composer.marshal(&mp4.AudioSampleEntry{
 		SampleEntry:  mp4.SampleEntry{AnyTypeBox: mp4.AnyTypeBox{Type: mp4.BoxTypeMp4a()}, DataReferenceIndex: 1},
-		ChannelCount: uint16(layout.track.Channels), SampleSize: mp4SampleBits, SampleRate: mp4Timescale << 16,
+		ChannelCount: clampUint16(layout.track.Channels), SampleSize: mp4SampleBits, SampleRate: mp4Timescale << 16,
 	})
 	composer.leaf(mp4.BoxTypeEsds(), &mp4.Esds{Descriptors: elementaryStreamDescriptors(layout.track)})
 	composer.end()
@@ -246,14 +258,14 @@ func (layout mp4Layout) writeSampleDescription(composer *boxComposer) {
 }
 
 func elementaryStreamDescriptors(track MP4AudioTrack) []mp4.Descriptor {
-	specificSize := uint32(len(track.AudioSpecificConfig))
+	specificSize := clampUint32(int64(len(track.AudioSpecificConfig)))
 	decoderSize := mp4DecoderConfigBytes + mp4DescriptorHeader + specificSize
 	esSize := mp4ESDescriptorBytes + mp4DescriptorHeader + decoderSize + mp4DescriptorHeader + 1
 	return []mp4.Descriptor{
 		{Tag: mp4ESDescriptorTag, Size: esSize, ESDescriptor: &mp4.ESDescriptor{ESID: mp4TrackID}},
 		{Tag: mp4DecoderConfigTag, Size: decoderSize, DecoderConfigDescriptor: &mp4.DecoderConfigDescriptor{
 			ObjectTypeIndication: mp4AudioObjectMPEG4, StreamType: mp4AudioStreamType, Reserved: true,
-			MaxBitrate: uint32(track.Bitrate), AvgBitrate: uint32(track.Bitrate),
+			MaxBitrate: clampUint32(int64(track.Bitrate)), AvgBitrate: clampUint32(int64(track.Bitrate)),
 		}},
 		{Tag: mp4DecoderSpecificTag, Size: specificSize, Data: track.AudioSpecificConfig},
 		{Tag: mp4SLConfigTag, Size: 1, Data: []byte{mp4SLConfigPredefined}},

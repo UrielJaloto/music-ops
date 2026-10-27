@@ -138,8 +138,8 @@ func (pipeline *fdkPipeline) encode(chunk []byte) error {
 		return nil
 	}
 	pcm := make([]int16, len(chunk)/pcmSampleBytes)
-	for index := range pcm {
-		pcm[index] = int16(binary.LittleEndian.Uint16(chunk[index*pcmSampleBytes:]))
+	if _, err := binary.Decode(chunk, binary.LittleEndian, pcm); err != nil {
+		return fmt.Errorf("decoding pcm: %w", err)
 	}
 	pipeline.sourceSamples += int64(len(pcm) / pipeline.channels)
 	frames, err := pipeline.session.Encode(pcm)

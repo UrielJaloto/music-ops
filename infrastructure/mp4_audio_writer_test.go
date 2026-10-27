@@ -32,7 +32,7 @@ func writeThreeFrameMP4(t *testing.T) string {
 
 func boxLayoutOf(t *testing.T, path string) string {
 	t.Helper()
-	file, err := os.Open(path)
+	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func boxLayoutOf(t *testing.T, path string) string {
 		if handle.BoxInfo.IsSupportedType() && handle.BoxInfo.Type != mp4.BoxTypeMdat() {
 			return handle.Expand()
 		}
-		return nil, nil
+		return handle.BoxInfo, nil
 	})
 	if err != nil {
 		t.Fatal(err)

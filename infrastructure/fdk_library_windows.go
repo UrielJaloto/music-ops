@@ -204,7 +204,7 @@ func fdkParameters(settings FDKSettings) []fdkParameter {
 func (session *FDKSession) Encode(pcm []int16) ([][]byte, error) {
 	frames := [][]byte{}
 	for len(pcm) > 0 {
-		frame, consumed, err := session.encodeCall(pcm, int32(len(pcm)))
+		frame, consumed, err := session.encodeCall(pcm, clampInt32(len(pcm)))
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +287,7 @@ type encodeCall struct {
 func newEncodeCall(pcm []int16, bitstream []byte) *encodeCall {
 	call := &encodeCall{
 		inputIdentifier: aacBufferInAudioData, outputIdentity: aacBufferOutBitstreamData,
-		inputSize: int32(len(pcm) * pcmSampleBytes), outputSize: int32(len(bitstream)),
+		inputSize: clampInt32(len(pcm) * pcmSampleBytes), outputSize: clampInt32(len(bitstream)),
 		elementSize: pcmSampleBytes, outputElement: 1, pcm: pcm, bitstream: bitstream,
 	}
 	if len(pcm) > 0 {
