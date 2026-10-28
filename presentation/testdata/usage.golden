@@ -1,0 +1,20 @@
+usage: music-ops <command> [arguments] [flags]
+
+commands:
+  run [folder]                 import a folder (asks for one when omitted)
+  preview [folder]             show the planned result without writing anything
+  config show                  print every setting
+  config get <key>             print one setting
+  config set <key> <value>     change one setting
+  config path                  print the settings file location
+  doctor                       check ffmpeg, encoder, Last.fm, advisors and output
+  watch [inbox]                import every folder that arrives in the inbox
+  advisor install              download the local advisor runtime and model
+  version                      print the version
+
+flags (run, preview, watch):
+  --out <dir>                  output folder (output.dir)
+  --layout flat|album_folders  output layout (output.layout)
+  --set key=value              override any setting, repeatable
+  --verbose                    print detailed logs to the console
+  --no-open                    do not open the report and the output folder
