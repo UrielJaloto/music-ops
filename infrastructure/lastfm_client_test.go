@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/time/rate"
+
+	"github.com/UrielJaloto/music-ops/services"
 )
 
 type lastFMServer struct {
@@ -104,8 +106,8 @@ func TestLastFMClient_Outcomes(t *testing.T) {
 		{name: "RateLimitedThenSuccess", replies: []lastFMReply{{status: 429, body: ""}, {status: 200, body: `{"toptags":{"tag":[{"name":"pop"}]}}`}}, expectedTags: []string{"pop"}, expectedCalls: 2},
 		{name: "RetryableCodeThenSuccess", replies: []lastFMReply{{status: 200, body: `{"error":29,"message":"Rate limit"}`}, {status: 200, body: `{"toptags":{"tag":[{"name":"pop"}]}}`}}, expectedTags: []string{"pop"}, expectedCalls: 2},
 		{name: "RetriesExhausted", replies: []lastFMReply{{status: 500, body: ""}}, expectedError: errLastFMRetryable, expectedCalls: 5},
-		{name: "InvalidKey", replies: []lastFMReply{{status: 403, body: `{"error":10,"message":"Invalid API key"}`}}, expectedError: ErrLastFMKeyInvalid, expectedCalls: 1},
-		{name: "SuspendedKey", replies: []lastFMReply{{status: 200, body: `{"error":26,"message":"Suspended"}`}}, expectedError: ErrLastFMKeyInvalid, expectedCalls: 1},
+		{name: "InvalidKey", replies: []lastFMReply{{status: 403, body: `{"error":10,"message":"Invalid API key"}`}}, expectedError: services.ErrLastFMKeyInvalid, expectedCalls: 1},
+		{name: "SuspendedKey", replies: []lastFMReply{{status: 200, body: `{"error":26,"message":"Suspended"}`}}, expectedError: services.ErrLastFMKeyInvalid, expectedCalls: 1},
 		{name: "OtherClientError_NoRetry", replies: []lastFMReply{{status: 400, body: `{"error":7,"message":"Invalid resource"}`}}, expectedError: errLastFMRejected, expectedCalls: 1},
 	}
 	for _, testCase := range cases {
@@ -130,7 +132,7 @@ func TestLastFMClient_InvalidKeyStopsFurtherCalls(t *testing.T) {
 	_, firstErr := client.ArtistTags(context.Background(), "A")
 	_, secondErr := client.TrackTags(context.Background(), "B", "C")
 
-	if !errors.Is(firstErr, ErrLastFMKeyInvalid) || !errors.Is(secondErr, ErrLastFMKeyInvalid) || len(server.queries) != 1 {
+	if !errors.Is(firstErr, services.ErrLastFMKeyInvalid) || !errors.Is(secondErr, services.ErrLastFMKeyInvalid) || len(server.queries) != 1 {
 		t.Fatalf("errors = %v %v calls = %d", firstErr, secondErr, len(server.queries))
 	}
 }
@@ -266,7 +268,7 @@ func TestLastFMClient_ProbeTagSource(t *testing.T) {
 	err := client.ProbeTagSource(context.Background())
 	failingErr := failing.ProbeTagSource(context.Background())
 
-	if err != nil || server.queries[0].Get("artist") != "Queen" || !errors.Is(failingErr, ErrLastFMKeyInvalid) {
+	if err != nil || server.queries[0].Get("artist") != "Queen" || !errors.Is(failingErr, services.ErrLastFMKeyInvalid) {
 		t.Fatalf("err = %v failing = %v", err, failingErr)
 	}
 }

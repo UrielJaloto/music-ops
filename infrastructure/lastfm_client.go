@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/UrielJaloto/music-ops/services"
 )
 
 const (
@@ -32,9 +34,8 @@ const (
 )
 
 var (
-	ErrLastFMKeyInvalid = errors.New("last.fm api key is invalid")
-	errLastFMRetryable  = errors.New("last.fm temporary failure")
-	errLastFMRejected   = errors.New("last.fm rejected the request")
+	errLastFMRetryable = errors.New("last.fm temporary failure")
+	errLastFMRejected  = errors.New("last.fm rejected the request")
 )
 
 var (
@@ -81,13 +82,13 @@ func (client LastFMClient) ProbeTagSource(ctx context.Context) error {
 
 func (client LastFMClient) topTags(ctx context.Context, query url.Values, artist string) ([]string, error) {
 	if client.isKeyInvalid.Load() {
-		return nil, ErrLastFMKeyInvalid
+		return nil, services.ErrLastFMKeyInvalid
 	}
 	query.Set("api_key", client.settings.APIKey)
 	query.Set("format", "json")
 	query.Set("autocorrect", "1")
 	response, err := client.fetchWithRetries(ctx, client.settings.BaseURL+"?"+query.Encode())
-	if errors.Is(err, ErrLastFMKeyInvalid) {
+	if errors.Is(err, services.ErrLastFMKeyInvalid) {
 		client.isKeyInvalid.Store(true)
 	}
 	if err != nil {
@@ -177,7 +178,7 @@ func classifyLastFMError(decoded lastFMResponse, status int) (lastFMResponse, er
 	case decoded.Error == lastFMNotFound:
 		return lastFMResponse{}, nil
 	case slices.Contains(lastFMKeyInvalidCodes, decoded.Error):
-		return lastFMResponse{}, fmt.Errorf("%w: %s", ErrLastFMKeyInvalid, decoded.Message)
+		return lastFMResponse{}, fmt.Errorf("%w: %s", services.ErrLastFMKeyInvalid, decoded.Message)
 	case slices.Contains(lastFMRetryableCodes, decoded.Error):
 		return lastFMResponse{}, fmt.Errorf("%w: error %d %s", errLastFMRetryable, decoded.Error, decoded.Message)
 	case decoded.Error != 0 || status >= http.StatusBadRequest:
