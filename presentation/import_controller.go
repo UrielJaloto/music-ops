@@ -25,8 +25,13 @@ type RunFinisher interface {
 	Finish(ctx context.Context, output services.ImportOutput) error
 }
 
+type RunReporter interface {
+	Present(ctx context.Context, output services.ImportOutput) (string, error)
+}
+
 type ImportResultPresenter interface {
-	Imported(output services.ImportOutput)
+	Imported(output services.ImportOutput, reportPath string)
+	ReportFailed(err error)
 	Previewed(output services.ImportPreviewOutput)
 	FinishFailed(err error)
 	Failed(err error) int
@@ -43,6 +48,7 @@ type ImportDefaults struct {
 type ImportServices struct {
 	Importer  FolderImporter
 	Previewer ImportPreviewer
+	Reporter  RunReporter
 }
 
 type ImportDesktop struct {
@@ -75,9 +81,17 @@ func (controller ImportController) Run(ctx context.Context, arguments []string) 
 	if err != nil {
 		return controller.presenter.Failed(err)
 	}
-	controller.presenter.Imported(output)
+	controller.presenter.Imported(output, controller.report(ctx, output))
 	controller.finish(ctx, output)
 	return output.ExitStatus
+}
+
+func (controller ImportController) report(ctx context.Context, output services.ImportOutput) string {
+	path, err := controller.services.Reporter.Present(ctx, output)
+	if err != nil {
+		controller.presenter.ReportFailed(err)
+	}
+	return path
 }
 
 func (controller ImportController) Preview(ctx context.Context, arguments []string) int {

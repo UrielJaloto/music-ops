@@ -235,3 +235,11 @@ func TestReportStorage_Create_Errors(t *testing.T) {
 		t.Fatalf("errors = %v %v", folderErr, cancelErr)
 	}
 }
+
+func TestReportStorage_Location(t *testing.T) {
+	location := NewReportStorage("E:/Music").Location("run-1", "report.md")
+
+	if location != filepath.Join("E:/Music", ".music-ops", "runs", "run-1", "report.md") {
+		t.Fatalf("location = %s", location)
+	}
+}

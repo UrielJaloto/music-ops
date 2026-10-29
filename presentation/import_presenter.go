@@ -3,7 +3,6 @@ package presentation
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -12,13 +11,11 @@ import (
 )
 
 const (
-	reportFolder     = ".music-ops"
-	reportRunsFolder = "runs"
-	reportFileName   = "report.md"
-	tableMinWidth    = 0
-	tableTabWidth    = 4
-	tablePadding     = 2
-	tablePadChar     = ' '
+	notWritten    = "not written"
+	tableMinWidth = 0
+	tableTabWidth = 4
+	tablePadding  = 2
+	tablePadChar  = ' '
 )
 
 type ErrorReporter interface {
@@ -34,7 +31,7 @@ func NewImportPresenter(output io.Writer, errors ErrorReporter) ImportPresenter 
 	return ImportPresenter{output: output, errors: errors}
 }
 
-func (presenter ImportPresenter) Imported(output services.ImportOutput) {
+func (presenter ImportPresenter) Imported(output services.ImportOutput, reportPath string) {
 	counts := output.Counts
 	lines := []string{
 		fmt.Sprintf("Run %s finished in %s", output.RunID, output.Duration.Round(time.Second)),
@@ -43,7 +40,7 @@ func (presenter ImportPresenter) Imported(output services.ImportOutput) {
 		fmt.Sprintf("  skipped    %d", counts.Skipped),
 		fmt.Sprintf("  failed     %d", counts.Failed),
 		fmt.Sprintf("  total      %d", counts.Total),
-		"Report: " + filepath.Join(output.Output, reportFolder, reportRunsFolder, output.RunID, reportFileName),
+		"Report: " + reportLine(reportPath),
 		fmt.Sprintf("Warnings: %d", len(output.Warnings)),
 	}
 	presenter.write(strings.Join(lines, "\n") + "\n")
@@ -59,6 +56,17 @@ func (presenter ImportPresenter) Previewed(output services.ImportPreviewOutput) 
 	_ = writer.Flush()
 	table.WriteString(fmt.Sprintf("%d tracks planned, %d warnings\n", len(output.Rows), len(output.Warnings)))
 	presenter.write(table.String())
+}
+
+func reportLine(reportPath string) string {
+	if reportPath == "" {
+		return notWritten
+	}
+	return reportPath
+}
+
+func (presenter ImportPresenter) ReportFailed(err error) {
+	presenter.write("warning: could not write the report: " + err.Error() + "\n")
 }
 
 func (presenter ImportPresenter) FinishFailed(err error) {

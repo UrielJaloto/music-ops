@@ -1,0 +1,40 @@
+# music-ops report {{.RunID}}
+
+- Input: `{{.Input}}`
+- Output: `{{.Output}}`
+- Duration: {{.Duration}}
+- Exit status: {{.ExitStatus}}
+
+## Counts
+
+| Status | Tracks |
+|---|---|
+| ✅ published | {{.Counts.Published}} |
+| ♻️ duplicate | {{.Counts.Duplicate}} |
+| ⏭️ skipped | {{.Counts.Skipped}} |
+| ❌ failed | {{.Counts.Failed}} |
+| total | {{.Counts.Total}} |
+
+## Stage timings
+
+| Stage | Duration |
+|---|---|
+{{- range .Timings}}
+| {{.Stage}} | {{.Duration}} |
+{{- end}}
+
+## Warnings
+{{if .Warnings}}
+{{- range .Warnings}}
+- {{.}}
+{{- end}}
+{{else}}
+None.
+{{end}}
+## Tracks
+
+| | Source | Target | Title | Artist | Genre | Status | Error |
+|---|---|---|---|---|---|---|---|
+{{- range .Tracks}}
+| {{.Icon}} | {{.Source}} | {{.Target}} | {{.Title}} | {{.Artist}} | {{.Genre}} | {{.Status}} | {{.Reason}} |
+{{- end}}
