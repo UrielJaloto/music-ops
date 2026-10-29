@@ -1,0 +1,4 @@
+✅  ffmpeg   9.0.2                          
+❌  fdk-aac  FDK-AAC not found              install fre:ac
+❌  output   output folder is not writable  music-ops config set output.dir <path>
+1 required check(s) failed.
