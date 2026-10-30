@@ -85,15 +85,19 @@ func NewConsoleSession(input io.Reader, output io.Writer) ConsoleSession {
 	return ConsoleSession{processCount: consoleProcessCount, input: input, output: output}
 }
 
-func (session ConsoleSession) WaitForExit() error {
+func (session ConsoleSession) isDoubleClicked() bool {
 	count, err := session.processCount()
-	if err != nil || count != attachedConsoleOnly {
+	return err == nil && count == attachedConsoleOnly
+}
+
+func (session ConsoleSession) WaitForExit() error {
+	if !session.isDoubleClicked() {
 		return nil
 	}
 	if _, err := fmt.Fprint(session.output, exitPrompt); err != nil {
 		return err
 	}
-	_, err = bufio.NewReader(session.input).ReadString('\n')
+	_, err := bufio.NewReader(session.input).ReadString('\n')
 	if errors.Is(err, io.EOF) || errors.Is(err, fs.ErrClosed) {
 		return nil
 	}
