@@ -544,7 +544,7 @@ func (session *importSession) publishTrack(track *domain.Track, profile domain.E
 		Metadata:    track.Metadata(),
 		Duration:    source.Quality.Duration(),
 		Bitrate:     profile.Bitrate(),
-		IsReencoded: domain.DecideEncoding(source.Codec) == domain.DecisionEncode,
+		IsReencoded: domain.DecideEncoding(source.Codec) == domain.DecisionEncode && profile.HasConstantBitrate(),
 	}
 }
 

@@ -575,3 +575,16 @@ func TestImportService_CancelMidPublish_ReturnsContextCanceled(t *testing.T) {
 		t.Fatalf("err = %v journal = %v published = %d", err, doubles.publisher.journal, len(doubles.publisher.published))
 	}
 }
+
+func TestImportService_Import_NativeEngineSkipsBitrateCheck(t *testing.T) {
+	doubles := newImportDoubles(t)
+	input := importInput()
+	input.Profile = domain.NewEncodingProfile(domain.EngineNative)
+
+	_, err := doubles.service().Import(context.Background(), input)
+
+	request := doubles.publisher.published[0]
+	if err != nil || request.Bitrate != 512000 || request.IsReencoded {
+		t.Fatalf("request = %+v err = %v", request, err)
+	}
+}
