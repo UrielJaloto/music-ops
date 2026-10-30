@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ const (
 	llamaHealthInterval = 250 * time.Millisecond
 	llamaStartTimeout   = 120 * time.Second
 	llamaStopWait       = 10 * time.Second
+	notInstalledModel   = "not-installed"
 )
 
 var ErrLocalAdvisorStartTimeout = errors.New("local advisor did not become ready in time")
@@ -211,4 +213,15 @@ func (advisor LazyLlamaAdvisor) ensureStarted(ctx context.Context) error {
 	advisor.state.session = session
 	advisor.state.isStarted = true
 	return nil
+}
+
+func LocalAdvisorURL(port int) string {
+	return LlamaServerSettings{Port: port}.baseURL()
+}
+
+func LocalModelName(modelFile string) string {
+	if modelFile == "" {
+		return notInstalledModel
+	}
+	return filepath.Base(modelFile)
 }

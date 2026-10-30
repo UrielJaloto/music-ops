@@ -230,3 +230,11 @@ func TestConfigStore_CancelledContext(t *testing.T) {
 		t.Fatalf("save err = %v", err)
 	}
 }
+
+func TestReadEnvironmentPaths(t *testing.T) {
+	paths := ReadEnvironmentPaths(environmentOf(map[string]string{"APPDATA": `C:\Roaming`, "LOCALAPPDATA": `C:\Local`}))
+
+	if paths != (EnvironmentPaths{AppData: `C:\Roaming`, LocalAppData: `C:\Local`}) {
+		t.Fatalf("paths = %+v", paths)
+	}
+}

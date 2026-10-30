@@ -21,16 +21,17 @@ import (
 )
 
 const (
-	lastFMMethodTrackTags  = "track.gettoptags"
-	lastFMMethodArtistTags = "artist.gettoptags"
-	lastFMMaximumAttempts  = 5
-	lastFMKeptTags         = 5
-	lastFMProbeArtist      = "Queen"
-	lastFMNotFound         = 6
-	lastFMBaseDelay        = 500 * time.Millisecond
-	lastFMJitter           = 0.2
-	lastFMResponseLimit    = 1 << 20
-	userAgentPrefix        = "music-ops/"
+	lastFMMethodTrackTags   = "track.gettoptags"
+	lastFMMethodArtistTags  = "artist.gettoptags"
+	lastFMMaximumAttempts   = 5
+	lastFMKeptTags          = 5
+	lastFMProbeArtist       = "Queen"
+	lastFMNotFound          = 6
+	lastFMBaseDelay         = 500 * time.Millisecond
+	lastFMJitter            = 0.2
+	lastFMResponseLimit     = 1 << 20
+	lastFMRequestsPerSecond = 4
+	userAgentPrefix         = "music-ops/"
 )
 
 var (
@@ -228,4 +229,8 @@ func (backoff ExponentialBackoff) Wait(ctx context.Context, attempt int) error {
 func (backoff ExponentialBackoff) Delay(attempt int) time.Duration {
 	jitter := 1 + lastFMJitter*(2*backoff.random()-1)
 	return time.Duration(float64(lastFMBaseDelay) * math.Pow(2, float64(attempt)) * jitter)
+}
+
+func NewLastFMLimiter() *rate.Limiter {
+	return rate.NewLimiter(lastFMRequestsPerSecond, 1)
 }

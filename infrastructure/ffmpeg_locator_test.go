@@ -95,3 +95,12 @@ func TestLocateFFmpeg_Missing(t *testing.T) {
 		})
 	}
 }
+
+func TestFFmpegForDiagnostics(t *testing.T) {
+	found := FFmpegForDiagnostics("", lookPathFinding(map[string]string{"ffmpeg": "path-ffmpeg"}), t.TempDir())
+	missing := FFmpegForDiagnostics("", lookPathFinding(nil), t.TempDir())
+
+	if found != "path-ffmpeg" || missing != executableFileName("ffmpeg") {
+		t.Fatalf("found = %s missing = %s", found, missing)
+	}
+}

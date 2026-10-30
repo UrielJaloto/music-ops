@@ -179,3 +179,16 @@ func TestImportRuntime_DelegatesToParts(t *testing.T) {
 		t.Fatalf("calls = %d id = %q err = %v %v progress = %v", calls.Load(), id, err, idErr, progress.started)
 	}
 }
+
+func TestWorkerPool_Run_DelegatesToRunParallel(t *testing.T) {
+	var calls atomic.Int32
+
+	err := NewWorkerPool(2).Run(context.Background(), 4, func(context.Context, int) error {
+		calls.Add(1)
+		return nil
+	})
+
+	if err != nil || calls.Load() != 4 {
+		t.Fatalf("calls = %d err = %v", calls.Load(), err)
+	}
+}

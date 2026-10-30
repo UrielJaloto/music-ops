@@ -112,11 +112,12 @@ func TestAACEncoderSelector(t *testing.T) {
 		name            string
 		availability    error
 		expectedProfile domain.EncodingProfile
+		expectedEngine  string
 		expectedFDK     int
 		expectedNative  int
 	}{
-		{name: "FDKAvailable_UsesFDK", expectedProfile: domain.NewEncodingProfile(domain.EngineFDK), expectedFDK: 2},
-		{name: "FDKMissing_UsesNative", availability: ErrFDKUnavailable, expectedProfile: domain.NewEncodingProfile(domain.EngineNative), expectedNative: 2},
+		{name: "FDKAvailable_UsesFDK", expectedProfile: domain.NewEncodingProfile(domain.EngineFDK), expectedEngine: "FDK-AAC", expectedFDK: 2},
+		{name: "FDKMissing_UsesNative", availability: ErrFDKUnavailable, expectedProfile: domain.NewEncodingProfile(domain.EngineNative), expectedEngine: "ffmpeg aac", expectedNative: 2},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -125,10 +126,11 @@ func TestAACEncoderSelector(t *testing.T) {
 			selector := NewAACEncoderSelector(fdk, native)
 
 			profile := selector.Profile()
+			engine := selector.EngineName()
 			firstErr := selector.Encode(context.Background(), services.EncodeRequest{})
 			secondErr := selector.Encode(context.Background(), services.EncodeRequest{})
 
-			if profile != testCase.expectedProfile || fdk.calls != testCase.expectedFDK || native.calls != testCase.expectedNative || fdk.checks != 1 || firstErr != nil || secondErr != nil {
+			if engine != testCase.expectedEngine || profile != testCase.expectedProfile || fdk.calls != testCase.expectedFDK || native.calls != testCase.expectedNative || fdk.checks != 1 || firstErr != nil || secondErr != nil {
 				t.Fatalf("profile = %v fdk = %d native = %d checks = %d", profile, fdk.calls, native.calls, fdk.checks)
 			}
 		})

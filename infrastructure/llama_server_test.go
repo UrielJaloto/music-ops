@@ -223,3 +223,9 @@ func TestLazyLlamaAdvisor_StartFailure(t *testing.T) {
 		t.Fatalf("errors = %v %v calls = %d starts = %d", creditErr, genreErr, inner.calls, server.starts)
 	}
 }
+
+func TestLocalModelName(t *testing.T) {
+	if LocalModelName("") != "not-installed" || LocalModelName(filepath.Join("C:", "models", "Qwen3.5-9B-Q4_K_M.gguf")) != "Qwen3.5-9B-Q4_K_M.gguf" || LocalAdvisorURL(8089) != "http://127.0.0.1:8089" {
+		t.Fatal("unexpected local advisor naming")
+	}
+}

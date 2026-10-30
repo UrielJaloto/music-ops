@@ -91,3 +91,11 @@ func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
 }
+
+func FFmpegForDiagnostics(configured string, lookPath func(string) (string, error), localAppData string) string {
+	path, err := LocateFFmpeg(configured, lookPath, localAppData)
+	if err != nil {
+		return executableFileName(ffmpegName)
+	}
+	return path
+}

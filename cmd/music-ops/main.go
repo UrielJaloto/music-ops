@@ -1,27 +1,45 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"io"
 	"os"
+
+	"github.com/UrielJaloto/music-ops/infrastructure"
+	"github.com/UrielJaloto/music-ops/presentation"
 )
 
 var version = "dev"
 
-const versionCommand = "version"
-
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], terminal{input: os.Stdin, output: os.Stdout, errors: os.Stderr}, os.LookupEnv))
 }
 
-func run(arguments []string, stdout, stderr io.Writer) int {
-	if len(arguments) == 1 && arguments[0] == versionCommand {
-		_, err := fmt.Fprintf(stdout, "music-ops %s\n", version)
-		if err != nil {
-			return 1
-		}
-		return 0
+type terminal struct {
+	input  io.Reader
+	output io.Writer
+	errors io.Writer
+}
+
+func run(arguments []string, console terminal, environment func(string) (string, bool)) int {
+	errorPresenter := presentation.NewErrorPresenter(console.errors)
+	request, err := presentation.ParseCommandLine(arguments)
+	if err != nil {
+		return errorPresenter.Present(err)
 	}
-	_, _ = fmt.Fprintln(stderr, "usage: music-ops version")
-	return 1
+	ctx, stop := infrastructure.InterruptContext(context.Background(), os.Exit)
+	defer stop()
+	paths := infrastructure.ReadEnvironmentPaths(environment)
+	store := infrastructure.NewConfigStore(infrastructure.DefaultConfigPath(paths.AppData), environment)
+	config, err := store.Load(ctx, request.Overrides)
+	if err != nil {
+		return errorPresenter.Present(err)
+	}
+	application := newWiring(wiringSettings{config: config, paths: paths, request: request, console: console, environment: environment, store: store})
+	code := application.router().Route(ctx, request)
+	application.close(ctx)
+	if err := infrastructure.NewConsoleSession(console.input, console.output).WaitForExit(); err != nil {
+		return errorPresenter.Present(err)
+	}
+	return code
 }

@@ -8,6 +8,11 @@ import (
 	"github.com/UrielJaloto/music-ops/services"
 )
 
+const (
+	fdkEngineName    = "FDK-AAC"
+	nativeEngineName = "ffmpeg aac"
+)
+
 type OptionalAudioEncoder interface {
 	Available() error
 	Encode(ctx context.Context, request services.EncodeRequest) error
@@ -51,4 +56,11 @@ func (selector AACEncoderSelector) usesFDK() bool {
 		selector.choice.isFDKUsed = selector.fdk.Available() == nil
 	})
 	return selector.choice.isFDKUsed
+}
+
+func (selector AACEncoderSelector) EngineName() string {
+	if selector.usesFDK() {
+		return fdkEngineName
+	}
+	return nativeEngineName
 }

@@ -40,3 +40,7 @@ func (pool WorkerPool) effectiveLimit() int {
 	}
 	return max(runtime.NumCPU()-1, minimumPoolLimit)
 }
+
+func (pool WorkerPool) Run(ctx context.Context, size int, task func(ctx context.Context, index int) error) error {
+	return pool.RunParallel(ctx, size, task)
+}
