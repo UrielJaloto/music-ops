@@ -27,8 +27,10 @@ func run(arguments []string, console terminal, environment func(string) (string,
 	if err != nil {
 		return errorPresenter.Present(err)
 	}
-	ctx, stop := infrastructure.InterruptContext(context.Background(), os.Exit)
+	interrupted, stop := infrastructure.InterruptContext(context.Background(), os.Exit)
 	defer stop()
+	ctx, cancel := withTestCancellation(interrupted, environment)
+	defer cancel()
 	paths := infrastructure.ReadEnvironmentPaths(environment)
 	store := infrastructure.NewConfigStore(infrastructure.DefaultConfigPath(paths.AppData), environment)
 	config, err := store.Load(ctx, request.Overrides)
@@ -37,7 +39,7 @@ func run(arguments []string, console terminal, environment func(string) (string,
 	}
 	application := newWiring(wiringSettings{config: config, paths: paths, request: request, console: console, environment: environment, store: store})
 	code := application.router().Route(ctx, request)
-	application.close(ctx)
+	application.close(context.WithoutCancel(ctx))
 	if err := infrastructure.NewConsoleSession(console.input, console.output).WaitForExit(); err != nil {
 		return errorPresenter.Present(err)
 	}
