@@ -26,10 +26,6 @@ var encoderPaths = []encoderPath{
 	{name: "Native", minimumBitrate: nativeMinimumBitrate, configure: func(environment *e2eEnvironment) { environment.useNativeEncoder() }},
 }
 
-func stereo(path, format string, tags fixtureTags) fixture {
-	return fixture{path: path, format: format, tags: tags, sampleRate: 44100, channels: 2, bitDepth: 16, seconds: 2}
-}
-
 func TestE2E_HappyPath(t *testing.T) {
 	for _, encoder := range encoderPaths {
 		t.Run(encoder.name, func(t *testing.T) {
