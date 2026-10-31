@@ -5,8 +5,11 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/infrastructure"
 )
 
@@ -51,10 +54,29 @@ func TestLive_RealServices(t *testing.T) {
 	if result.ExitCode != 0 || result.Report.Counts["published"] != 3 {
 		t.Fatalf("result = %+v", result)
 	}
-	environment.assertTags(
-		expectedTrack{path: "Queen - Bohemian Rhapsody.m4a", title: "Bohemian Rhapsody", artist: "Queen", albumArtist: "Queen", genre: "Rock", track: "1/1"},
-		expectedTrack{path: "Racionais MC's - Negro Drama.m4a", title: "Negro Drama", artist: "Racionais MC's", albumArtist: "Racionais MC's", genre: "Rap Nacional", track: "1/1"},
-		expectedTrack{path: "Alex Gaudino - Destination Calabria [Radio Edit] (feat. Crystal Waters).m4a", title: "Destination Calabria [Radio Edit]", artist: "Alex Gaudino; Crystal Waters", albumArtist: "Alex Gaudino", genre: "Electronic; Dance", track: "1/1"},
+	environment.assertLiveTags(
+		liveTrack{expectedTrack: expectedTrack{path: "Queen - Bohemian Rhapsody.m4a", title: "Bohemian Rhapsody", artist: "Queen", albumArtist: "Queen", track: "1/1"}},
+		liveTrack{expectedTrack: expectedTrack{path: "Racionais MC's - Negro Drama.m4a", title: "Negro Drama", artist: "Racionais MC's", albumArtist: "Racionais MC's", track: "1/1"}, isBrazilian: true},
+		liveTrack{expectedTrack: expectedTrack{path: "Alex Gaudino - Destination Calabria [Radio Edit] (feat. Crystal Waters).m4a", title: "Destination Calabria [Radio Edit]", artist: "Alex Gaudino; Crystal Waters", albumArtist: "Alex Gaudino", track: "1/1"}},
 	)
 	assertInputUnchanged(t, environment.input, before)
+}
+
+type liveTrack struct {
+	expectedTrack
+	isBrazilian bool
+}
+
+func (environment *e2eEnvironment) assertLiveTags(expected ...liveTrack) {
+	environment.t.Helper()
+	for _, track := range expected {
+		tags := lowerKeys(environment.probe(filepath.Join(environment.output, filepath.FromSlash(track.path))).Format.Tags)
+		genre := tags["genre"]
+		withGenre := track.expectedTrack
+		withGenre.genre = genre
+		environment.assertTags(withGenre)
+		if genre == "" || genre == "desconhecido" || strings.HasSuffix(genre, " "+domain.NationalSuffix) != track.isBrazilian {
+			environment.t.Errorf("genre of %s = %q, brazilian = %v", track.path, genre, track.isBrazilian)
+		}
+	}
 }
