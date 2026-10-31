@@ -88,6 +88,23 @@ func (area StagingArea) Cleanup(ctx context.Context) error {
 	return removeStaleRuns(filepath.Dir(area.root), info.ModTime().Add(-staleStagingAge))
 }
 
+func (area StagingArea) RemoveOtherRuns() error {
+	parent := filepath.Dir(area.root)
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return fmt.Errorf("reading staging folders: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() == filepath.Base(area.root) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(parent, entry.Name())); err != nil {
+			return fmt.Errorf("removing interrupted staging folder: %w", err)
+		}
+	}
+	return nil
+}
+
 func removeStaleRuns(parent string, cutoff time.Time) error {
 	entries, err := os.ReadDir(parent)
 	if err != nil {

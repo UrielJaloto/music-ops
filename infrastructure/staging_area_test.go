@@ -117,6 +117,32 @@ func TestStagingArea_ShortSourcePath_Cancelled(t *testing.T) {
 	}
 }
 
+func TestStagingArea_RemoveOtherRuns(t *testing.T) {
+	area, output := prepareTestStaging(t)
+	staging := filepath.Join(output, ".music-ops", "staging")
+	writeTestFile(t, filepath.Join(staging, "20261015-000000-dead", "track.audio.m4a"), "x")
+	writeTestFile(t, filepath.Join(staging, "loose.tmp"), "x")
+	writeTestFile(t, area.StagedPath("own", ".audio.m4a"), "x")
+
+	err := area.RemoveOtherRuns()
+
+	entries, _ := os.ReadDir(staging)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "20261016-083005-abcd" || !area.Exists(area.StagedPath("own", ".audio.m4a")) {
+		t.Fatalf("entries = %v err = %v", entries, err)
+	}
+}
+
+func TestStagingArea_RemoveOtherRuns_ParentMissing(t *testing.T) {
+	area, output := prepareTestStaging(t)
+	if err := os.RemoveAll(filepath.Join(output, ".music-ops")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := area.RemoveOtherRuns(); err == nil || !strings.Contains(err.Error(), "reading staging folders") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestStagingArea_Cleanup(t *testing.T) {
 	area, output := prepareTestStaging(t)
 	parent := filepath.Join(output, ".music-ops", "staging")
