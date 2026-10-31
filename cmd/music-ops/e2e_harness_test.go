@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -204,7 +205,8 @@ func exitCodeOf(err error) int {
 	if err == nil {
 		return 0
 	}
-	if exitError, isExit := err.(*exec.ExitError); isExit {
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
 		return exitError.ExitCode()
 	}
 	return -1

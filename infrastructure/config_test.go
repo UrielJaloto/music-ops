@@ -210,7 +210,7 @@ func TestConfigStore_SettingsStoreContract(t *testing.T) {
 	if err != nil || values["lastfm.api_key"] != "secret" || values["watch.inbox"] != "D:/Inbox" || values["advisor.port"] != "8089" {
 		t.Fatalf("values = %v err = %v", values, err)
 	}
-	if len(store.Keys()) != 16 || store.Keys()[0] != "output.dir" {
+	if len(store.Keys()) != 14 || store.Keys()[0] != "output.dir" {
 		t.Fatalf("keys = %v", store.Keys())
 	}
 	if DefaultConfigPath(`C:\AppData`) != filepath.Join(`C:\AppData`, "music-ops", "config.yaml") {
