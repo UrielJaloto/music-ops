@@ -36,3 +36,4 @@ go.work.sum
 /bin/
 .music-ops/
 music-ops-out/
+/cmd/music-ops/resource_windows_amd64.syso
