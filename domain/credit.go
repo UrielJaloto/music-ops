@@ -25,6 +25,7 @@ var (
 	guestSeparatorPattern     = regexp.MustCompile(`(?i)\s*[,&]\s*|\s+(?:and|e|x)\s+`)
 	leadingFeaturingPattern   = regexp.MustCompile(`(?i)^(?:(?:feat\.?|ft\.?|featuring)(?:\s+|$))+`)
 	emptyBracketsPattern      = regexp.MustCompile(`\(\s*\)|\[\s*\]`)
+	placeholderArtists        = []string{"various artists", "various", "va", "v.a.", "varios artistas", "vários artistas", "diversos artistas", "artistas variados"}
 )
 
 type Title struct {
@@ -91,7 +92,14 @@ func NewArtistCredit(artists []string) (ArtistCredit, error) {
 	if len(unique) == 0 {
 		return ArtistCredit{}, ErrArtistMissing
 	}
+	if named := slices.DeleteFunc(slices.Clone(unique), isPlaceholderArtist); len(named) > 0 {
+		unique = named
+	}
 	return ArtistCredit{artists: unique}, nil
+}
+
+func isPlaceholderArtist(artist string) bool {
+	return slices.Contains(placeholderArtists, strings.ToLower(artist))
 }
 
 func ParseArtistCredit(tag string) (ArtistCredit, error) {
