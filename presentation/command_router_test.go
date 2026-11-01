@@ -38,7 +38,7 @@ func readGolden(t *testing.T, name string) string {
 func newRouterWithSpies() (CommandRouter, map[string]*controllerSpy, *bytes.Buffer) {
 	spies := map[string]*controllerSpy{}
 	controllers := map[string]CommandController{}
-	for index, command := range []string{CommandRun, CommandPreview, CommandConfig, CommandDoctor, CommandWatch, CommandAdvisor, CommandVersion} {
+	for index, command := range []string{CommandRun, CommandPreview, CommandConfig, CommandStatus, CommandWatch, CommandAdvisor, CommandVersion} {
 		spy := &controllerSpy{code: 10 + index}
 		spies[command] = spy
 		controllers[command] = spy
@@ -57,7 +57,7 @@ func TestCommandRouter_RoutesEveryCommand(t *testing.T) {
 		{arguments: []string{"run", "D:/In"}, expectedCommand: CommandRun, expectedArguments: []string{"D:/In"}},
 		{arguments: []string{"preview", "D:/In"}, expectedCommand: CommandPreview, expectedArguments: []string{"D:/In"}},
 		{arguments: []string{"config", "set", "output.dir", "E:/Music"}, expectedCommand: CommandConfig, expectedArguments: []string{"set", "output.dir", "E:/Music"}},
-		{arguments: []string{"doctor"}, expectedCommand: CommandDoctor, expectedArguments: []string{}},
+		{arguments: []string{"status"}, expectedCommand: CommandStatus, expectedArguments: []string{}},
 		{arguments: []string{"watch", "D:/Inbox"}, expectedCommand: CommandWatch, expectedArguments: []string{"D:/Inbox"}},
 		{arguments: []string{"advisor", "install"}, expectedCommand: CommandAdvisor, expectedArguments: []string{"install"}},
 		{arguments: []string{"version"}, expectedCommand: CommandVersion, expectedArguments: []string{}},
@@ -138,9 +138,9 @@ func TestParseCommandLine_Flags(t *testing.T) {
 			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{"output.dir": "E:/Music"}, OpensFiles: true},
 		},
 		{
-			name:      "DoctorAcceptsFlags",
-			arguments: []string{"doctor", "--out", "E:/Music"},
-			expected:  RouterRequest{Command: "doctor", Arguments: []string{}, Overrides: map[string]string{"output.dir": "E:/Music"}, OpensFiles: true},
+			name:      "StatusAcceptsFlags",
+			arguments: []string{"status", "--out", "E:/Music"},
+			expected:  RouterRequest{Command: "status", Arguments: []string{}, Overrides: map[string]string{"output.dir": "E:/Music"}, OpensFiles: true},
 		},
 		{
 			name:      "ConfigKeepsRawArguments",

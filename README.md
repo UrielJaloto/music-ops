@@ -55,7 +55,7 @@ A batch of 20 FLAC tracks (about 1 GB) takes about 70 seconds on an 8 GB NVIDIA 
 7. Check everything:
 
    ```
-   music-ops doctor
+   music-ops status
    ```
 
 ## Usage
@@ -69,7 +69,7 @@ A batch of 20 FLAC tracks (about 1 GB) takes about 70 seconds on an 8 GB NVIDIA 
 | `music-ops config set output.dir <dir>` | Sets the default library folder. |
 | `music-ops config show` | Prints the effective configuration. |
 | `music-ops version` | Prints the version, ffmpeg and the active encoder. |
-| `music-ops doctor` | Checks ffmpeg, the encoder, Last.fm, the advisor and the output folder. |
+| `music-ops status` | Checks ffmpeg, the encoder, Last.fm, the advisor and the output folder. |
 
 Any setting can be overridden for one run with `--set key=value` (shortcuts: `--out`, `--layout`) or with an environment variable named after the key (`MUSIC_OPS_LASTFM_API_KEY` for `lastfm.api_key`). `--verbose` prints detailed logs and `--no-open` skips opening the report.
 

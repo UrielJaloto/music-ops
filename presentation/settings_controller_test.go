@@ -103,8 +103,8 @@ func TestDiagnosticsController(t *testing.T) {
 		golden       string
 		expectedCode int
 	}{
-		{name: "Healthy", output: services.DiagnosticsOutput{Checks: checks[:2], IsHealthy: true}, golden: "doctor_healthy.golden", expectedCode: 0},
-		{name: "Unhealthy", output: services.DiagnosticsOutput{Checks: checks, IsHealthy: false}, golden: "doctor_unhealthy.golden", expectedCode: 1},
+		{name: "Healthy", output: services.DiagnosticsOutput{Checks: checks[:2], IsHealthy: true}, golden: "status_healthy.golden", expectedCode: 0},
+		{name: "Unhealthy", output: services.DiagnosticsOutput{Checks: checks, IsHealthy: false}, golden: "status_unhealthy.golden", expectedCode: 1},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {

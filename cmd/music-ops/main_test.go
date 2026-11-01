@@ -59,7 +59,7 @@ func TestRun_CommandLineAndConfigErrors(t *testing.T) {
 		expectedStderr string
 	}{
 		{name: "MalformedFlag", arguments: []string{"run", "--set", "nodivider"}, expectedCode: 1, expectedStderr: "error: invalid command line; run: music-ops help\n"},
-		{name: "UnknownOverride", arguments: []string{"doctor", "--set", "output.color=blue"}, expectedCode: 1, expectedStderr: "error: unknown setting; run: music-ops config show\n"},
+		{name: "UnknownOverride", arguments: []string{"status", "--set", "output.color=blue"}, expectedCode: 1, expectedStderr: "error: unknown setting; run: music-ops config show\n"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestWiring_BuildsEveryCommandGraph(t *testing.T) {
 	if importErr != nil || watchErr != nil || versionErr != nil {
 		t.Fatalf("errors = %v %v %v", importErr, watchErr, versionErr)
 	}
-	if application.doctorCommand() == nil || application.configCommand() == nil || application.advisorCommand() == nil {
+	if application.statusCommand() == nil || application.configCommand() == nil || application.advisorCommand() == nil {
 		t.Fatal("command missing")
 	}
 }
