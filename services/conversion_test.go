@@ -62,6 +62,15 @@ func (fake *conversionJournalFake) RecordConverted(_ context.Context, id domain.
 	return fake.writeErr
 }
 
+func aacQuality(t *testing.T) domain.AudioQuality {
+	t.Helper()
+	quality, err := domain.NewAudioQuality(domain.AudioQualityDetails{SampleRate: 44100, BitDepth: 16, Channels: 2, Duration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return quality
+}
+
 func testQuality(t *testing.T) domain.AudioQuality {
 	t.Helper()
 	quality, err := domain.NewAudioQuality(domain.AudioQualityDetails{SampleRate: 96000, BitDepth: 24, Channels: 2, Duration: time.Minute})
@@ -88,7 +97,7 @@ type conversionCase struct {
 func TestConversionService_Convert(t *testing.T) {
 	quality := testQuality(t)
 	flac := ConvertTrack{ID: "a", Source: "in/a.flac", Codec: "flac", Quality: quality}
-	aac := ConvertTrack{ID: "b", Source: "in/b.m4a", Codec: "aac", Quality: quality}
+	aac := ConvertTrack{ID: "b", Source: "in/b.m4a", Codec: "aac", Quality: aacQuality(t)}
 	mp3 := ConvertTrack{ID: "c", Source: "in/c.mp3", Codec: "mp3", Quality: quality}
 	cases := []conversionCase{
 		{name: "LosslessSource_IsEncoded", tracks: []ConvertTrack{flac}, journal: &conversionJournalFake{}, expectedEncodes: 1, expectedRecorded: 1},
@@ -160,7 +169,7 @@ func TestConversionService_Convert_CopierFailure(t *testing.T) {
 	copier := &copierSpy{err: errTechnical}
 	service := NewConversionService(&encoderSpy{}, copier, stagingFake{}, &conversionJournalFake{}, sequentialPool{})
 
-	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "b", Source: "in/b.m4a", Codec: "aac"}}})
+	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "b", Source: "in/b.m4a", Codec: "aac", Quality: aacQuality(t)}}})
 
 	if err != nil || len(output.Failed) != 1 || output.Failed[0].ID != "b" || output.Failed[0].Source != "in/b.m4a" {
 		t.Fatalf("output = %+v err = %v", output, err)
