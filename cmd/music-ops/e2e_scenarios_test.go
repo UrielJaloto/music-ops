@@ -48,16 +48,16 @@ func TestE2E_HappyPath(t *testing.T) {
 			if result.ExitCode != 0 || result.Report.Counts["published"] != 3 || result.Report.Counts["failed"] != 0 {
 				t.Fatalf("result = %+v", result)
 			}
-			assertTree(t, environment.output, "$werve - HEATSEEKER (feat. Ethan Ross).m4a", "$werve - Song Two.m4a", "$werve - Third (feat. A; B).m4a")
+			assertTree(t, environment.output, "in/$werve - HEATSEEKER (feat. Ethan Ross).m4a", "in/$werve - Song Two.m4a", "in/$werve - Third (feat. A; B).m4a")
 			environment.assertTags(
-				expectedTrack{path: "$werve - HEATSEEKER (feat. Ethan Ross).m4a", title: "HEATSEEKER", artist: "$werve; Ethan Ross", albumArtist: "$werve", genre: "Electronic; House", track: "1/3"},
-				expectedTrack{path: "$werve - Song Two.m4a", title: "Song Two", artist: "$werve", albumArtist: "$werve", genre: "Electronic", track: "2/3"},
-				expectedTrack{path: "$werve - Third (feat. A; B).m4a", title: "Third", artist: "$werve; A; B", albumArtist: "$werve", genre: "Hip-Hop", track: "3/3"},
+				expectedTrack{path: "in/$werve - HEATSEEKER (feat. Ethan Ross).m4a", title: "HEATSEEKER", artist: "$werve; Ethan Ross", albumArtist: "$werve", genre: "Electronic; House", track: "1/3"},
+				expectedTrack{path: "in/$werve - Song Two.m4a", title: "Song Two", artist: "$werve", albumArtist: "$werve", genre: "Electronic", track: "2/3"},
+				expectedTrack{path: "in/$werve - Third (feat. A; B).m4a", title: "Third", artist: "$werve; A; B", albumArtist: "$werve", genre: "Hip-Hop", track: "3/3"},
 			)
 			for _, file := range libraryFiles(t, environment.output) {
 				environment.assertAudio(file, encoder.minimumBitrate, 2)
 			}
-			if !environment.hasAttachedCover("$werve - Song Two.m4a") {
+			if !environment.hasAttachedCover("in/$werve - Song Two.m4a") {
 				t.Fatal("cover missing")
 			}
 			assertInputUnchanged(t, environment.input, before)
@@ -89,9 +89,9 @@ func TestE2E_MixedInputs(t *testing.T) {
 	if result.ExitCode != 0 || result.Report.Counts["published"] != 2 || result.Report.Counts["skipped"] != 2 {
 		t.Fatalf("result = %+v", result)
 	}
-	assertTree(t, environment.output, "Band - Copied.m4a", "Band - Encoded.m4a")
-	environment.assertAudio("Band - Encoded.m4a", fdkMinimumBitrate, 2)
-	copied := environment.probe(filepath.Join(environment.output, "Band - Copied.m4a"))
+	assertTree(t, environment.output, "in/Band - Copied.m4a", "in/Band - Encoded.m4a")
+	environment.assertAudio("in/Band - Encoded.m4a", fdkMinimumBitrate, 2)
+	copied := environment.probe(filepath.Join(environment.output, "in/Band - Copied.m4a"))
 	if copied.Streams[0].CodecName != "aac" || copied.Streams[0].BitRate == "" || strings.HasPrefix(copied.Streams[0].BitRate, "25") {
 		t.Fatalf("copied stream = %+v", copied.Streams[0])
 	}
@@ -130,11 +130,11 @@ func TestE2E_Duplicates(t *testing.T) {
 			if result.ExitCode != 0 || result.Report.Counts["published"] != 1 || result.Report.Counts["duplicate"] != 2 {
 				t.Fatalf("result = %+v", result)
 			}
-			assertTree(t, environment.output, "Band - Already There.m4a", "Band - Same Song.m4a")
+			assertTree(t, environment.output, "Band - Already There.m4a", "in/Band - Same Song.m4a")
 			if libraryCopy := libraryBefore[filepath.Join(environment.output, "Band - Already There.m4a")]; snapshotHashes(t, environment.output)[filepath.Join(environment.output, "Band - Already There.m4a")] != libraryCopy {
 				t.Fatal("library file was modified")
 			}
-			if environment.probe(filepath.Join(environment.output, "Band - Same Song.m4a")).Format.Duration == "" || !reportHasPublished(result.Report, "B", "01.flac") {
+			if environment.probe(filepath.Join(environment.output, "in/Band - Same Song.m4a")).Format.Duration == "" || !reportHasPublished(result.Report, "B", "01.flac") {
 				t.Fatalf("the lossless source should be the keeper: %+v", result.Report.Tracks)
 			}
 			assertInputUnchanged(t, environment.input, before)
@@ -165,7 +165,7 @@ func TestE2E_LongSourcePath(t *testing.T) {
 	if result.ExitCode != 0 || result.Report.Counts["published"] != 1 {
 		t.Fatalf("result = %+v", result)
 	}
-	assertTree(t, environment.output, "Band - Deep Track.m4a")
+	assertTree(t, environment.output, "in/Band - Deep Track.m4a")
 	assertInputUnchanged(t, environment.input, before)
 }
 
@@ -184,11 +184,11 @@ func TestE2E_UnicodeNamesAndTags(t *testing.T) {
 	if result.ExitCode != 0 || result.Report.Counts["published"] != 3 {
 		t.Fatalf("result = %+v", result)
 	}
-	assertTree(t, environment.output, "¥$ - PAPERWORK (feat. Ty Dolla $ign).m4a", "Motörhead - Ace of Spades 🂡.m4a", "1Kilo - Benção.m4a")
+	assertTree(t, environment.output, "in/¥$ - PAPERWORK (feat. Ty Dolla $ign).m4a", "in/Motörhead - Ace of Spades 🂡.m4a", "in/1Kilo - Benção.m4a")
 	environment.assertTags(
-		expectedTrack{path: "¥$ - PAPERWORK (feat. Ty Dolla $ign).m4a", title: "PAPERWORK", artist: "¥$; Ty Dolla $ign", albumArtist: "¥$", genre: "desconhecido", track: "1/1"},
-		expectedTrack{path: "Motörhead - Ace of Spades 🂡.m4a", title: "Ace of Spades 🂡", artist: "Motörhead", albumArtist: "Motörhead", genre: "desconhecido", track: "1/1"},
-		expectedTrack{path: "1Kilo - Benção.m4a", title: "Benção", artist: "1Kilo", albumArtist: "1Kilo", genre: "Rap Nacional", track: "1/1"},
+		expectedTrack{path: "in/¥$ - PAPERWORK (feat. Ty Dolla $ign).m4a", title: "PAPERWORK", artist: "¥$; Ty Dolla $ign", albumArtist: "¥$", genre: "desconhecido", track: "1/1"},
+		expectedTrack{path: "in/Motörhead - Ace of Spades 🂡.m4a", title: "Ace of Spades 🂡", artist: "Motörhead", albumArtist: "Motörhead", genre: "desconhecido", track: "1/1"},
+		expectedTrack{path: "in/1Kilo - Benção.m4a", title: "Benção", artist: "1Kilo", albumArtist: "1Kilo", genre: "Rap Nacional", track: "1/1"},
 	)
 	assertInputUnchanged(t, environment.input, before)
 }
@@ -205,7 +205,7 @@ func TestE2E_CorruptFile(t *testing.T) {
 	if result.ExitCode != 2 || result.Report.Counts["published"] != 1 || result.Report.Counts["failed"] != 1 {
 		t.Fatalf("result = %+v", result)
 	}
-	assertTree(t, environment.output, "Band - Fine.m4a")
+	assertTree(t, environment.output, "in/Band - Fine.m4a")
 	assertInputUnchanged(t, environment.input, before)
 }
 
@@ -221,7 +221,7 @@ func TestE2E_NoAdvisorAvailable(t *testing.T) {
 	if result.ExitCode != 0 || result.Report.Counts["published"] != 1 || len(result.Report.Warnings) == 0 {
 		t.Fatalf("result = %+v", result)
 	}
-	environment.assertTags(expectedTrack{path: "Band - Rocker (feat. Guest).m4a", title: "Rocker", artist: "Band; Guest", albumArtist: "Band", genre: "Rock", track: "1/1"})
+	environment.assertTags(expectedTrack{path: "in/Band - Rocker (feat. Guest).m4a", title: "Rocker", artist: "Band; Guest", albumArtist: "Band", genre: "Rock", track: "1/1"})
 	assertInputUnchanged(t, environment.input, before)
 }
 
@@ -236,7 +236,7 @@ func TestE2E_AdvisorInventsArtist(t *testing.T) {
 	if result.ExitCode != 0 || environment.llama.calls.Load() == 0 || !hasWarning(result.Report, "credit rules used") {
 		t.Fatalf("result = %+v llama calls = %d", result, environment.llama.calls.Load())
 	}
-	environment.assertTags(expectedTrack{path: "Band - Hit (feat. Guest).m4a", title: "Hit", artist: "Band; Guest", albumArtist: "Band", genre: "desconhecido", track: "1/1"})
+	environment.assertTags(expectedTrack{path: "in/Band - Hit (feat. Guest).m4a", title: "Hit", artist: "Band; Guest", albumArtist: "Band", genre: "desconhecido", track: "1/1"})
 	assertInputUnchanged(t, environment.input, before)
 }
 
@@ -265,8 +265,8 @@ func TestE2E_LastFMAlwaysFailing(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	environment.assertTags(
-		expectedTrack{path: "Band - Known Song.m4a", title: "Known Song", artist: "Band", albumArtist: "Band", genre: "Pop", track: "1/2"},
-		expectedTrack{path: "Band - Unknown Song.m4a", title: "Unknown Song", artist: "Band", albumArtist: "Band", genre: "desconhecido", track: "2/2"},
+		expectedTrack{path: "in/Band - Known Song.m4a", title: "Known Song", artist: "Band", albumArtist: "Band", genre: "Pop", track: "1/2"},
+		expectedTrack{path: "in/Band - Unknown Song.m4a", title: "Unknown Song", artist: "Band", albumArtist: "Band", genre: "desconhecido", track: "2/2"},
 	)
 	assertInputUnchanged(t, environment.input, before)
 }
@@ -277,7 +277,7 @@ func TestE2E_SecondRunWritesNothing(t *testing.T) {
 	environment.addInput(stereo("Album/01.flac", "flac", fixtureTags{title: "Again", artist: "Band"}))
 	before := snapshotHashes(t, environment.input)
 	first := environment.run("run", environment.input)
-	libraryAfterFirst := snapshotHashes(t, environment.output+"/Band - Again.m4a")
+	libraryAfterFirst := snapshotHashes(t, environment.output+"/in/Band - Again.m4a")
 	lastfmCalls, llamaCalls := environment.lastfm.calls.Load(), environment.llama.calls.Load()
 
 	second := environment.run("run", environment.input)
@@ -288,7 +288,7 @@ func TestE2E_SecondRunWritesNothing(t *testing.T) {
 	if environment.lastfm.calls.Load() != lastfmCalls || environment.llama.calls.Load() != llamaCalls {
 		t.Fatalf("network calls on second run: last.fm %d→%d llama %d→%d", lastfmCalls, environment.lastfm.calls.Load(), llamaCalls, environment.llama.calls.Load())
 	}
-	assertInputUnchanged(t, environment.output+"/Band - Again.m4a", libraryAfterFirst)
+	assertInputUnchanged(t, environment.output+"/in/Band - Again.m4a", libraryAfterFirst)
 	assertInputUnchanged(t, environment.input, before)
 }
 
@@ -309,7 +309,7 @@ func TestE2E_CrashThenResume(t *testing.T) {
 	if crashed.ExitCode == 0 || resumed.ExitCode != 0 {
 		t.Fatalf("crashed = %d %s resumed = %+v", crashed.ExitCode, crashed.Stderr, resumed)
 	}
-	assertTree(t, environment.output, "Band - One.m4a", "Band - Three.m4a", "Band - Two.m4a")
+	assertTree(t, environment.output, "in/Band - One.m4a", "in/Band - Three.m4a", "in/Band - Two.m4a")
 	assertNoLeftovers(t, environment.output)
 	assertInputUnchanged(t, environment.input, before)
 }
@@ -330,7 +330,7 @@ func TestE2E_PreviewLeavesOutputUntouched(t *testing.T) {
 
 	result := environment.run("preview", environment.input)
 
-	if result.ExitCode != 0 || !strings.Contains(result.Stdout, "Band - Planned (feat. Guest).m4a") || !strings.Contains(result.Stdout, "1 tracks planned") {
+	if result.ExitCode != 0 || !strings.Contains(result.Stdout, "in/Band - Planned (feat. Guest).m4a") || !strings.Contains(result.Stdout, "1 tracks planned") {
 		t.Fatalf("result = %+v", result)
 	}
 	assertTree(t, environment.output)

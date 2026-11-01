@@ -68,6 +68,7 @@ const (
 )
 
 type TargetPathDetails struct {
+	Folder      string
 	Layout      Layout
 	Template    string
 	AlbumArtist string
@@ -81,14 +82,18 @@ type TargetPath struct {
 }
 
 func NewTargetPath(details TargetPathDetails) (TargetPath, error) {
-	if details.Layout == LayoutFlat {
-		return TargetPath{relative: details.FileName.String()}, nil
+	relative := details.FileName.String()
+	if details.Layout == LayoutAlbumFolders {
+		folder, err := expandAlbumTemplate(details)
+		if err != nil {
+			return TargetPath{}, err
+		}
+		relative = folder + relativeSeparator + relative
 	}
-	folder, err := expandAlbumTemplate(details)
-	if err != nil {
-		return TargetPath{}, err
+	if folder := SanitizePathComponent(details.Folder, MaxFileNameUnits); folder != "" {
+		relative = folder + relativeSeparator + relative
 	}
-	return TargetPath{relative: folder + relativeSeparator + details.FileName.String()}, nil
+	return TargetPath{relative: relative}, nil
 }
 
 func (path TargetPath) Relative() string {
@@ -100,7 +105,8 @@ func (path TargetPath) DuplicateKey() string {
 }
 
 func duplicateKeyOf(relative string) string {
-	return strings.ToLower(collapseWhitespace(relative))
+	name := relative[strings.LastIndexAny(relative, "/\\")+1:]
+	return strings.ToLower(collapseWhitespace(name))
 }
 
 func expandAlbumTemplate(details TargetPathDetails) (string, error) {

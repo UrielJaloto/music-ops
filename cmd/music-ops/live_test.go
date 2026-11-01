@@ -55,9 +55,9 @@ func TestLive_RealServices(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 	environment.assertLiveTags(
-		liveTrack{expectedTrack: expectedTrack{path: "Queen - Bohemian Rhapsody.m4a", title: "Bohemian Rhapsody", artist: "Queen", albumArtist: "Queen", track: "1/1"}},
-		liveTrack{expectedTrack: expectedTrack{path: "Racionais MC's - Negro Drama.m4a", title: "Negro Drama", artist: "Racionais MC's", albumArtist: "Racionais MC's", track: "1/1"}, isBrazilian: true},
-		liveTrack{expectedTrack: expectedTrack{path: "Alex Gaudino - Destination Calabria [Radio Edit] (feat. Crystal Waters).m4a", title: "Destination Calabria [Radio Edit]", artist: "Alex Gaudino; Crystal Waters", albumArtist: "Alex Gaudino", track: "1/1"}},
+		liveTrack{expectedTrack: expectedTrack{path: "in/Queen - Bohemian Rhapsody.m4a", title: "Bohemian Rhapsody", artist: "Queen", albumArtist: "Queen", track: "1/1"}},
+		liveTrack{expectedTrack: expectedTrack{path: "in/Racionais MC's - Negro Drama.m4a", title: "Negro Drama", artist: "Racionais MC's", albumArtist: "Racionais MC's", track: "1/1"}, isBrazilian: true},
+		liveTrack{expectedTrack: expectedTrack{path: "in/Alex Gaudino - Destination Calabria [Radio Edit] (feat. Crystal Waters).m4a", title: "Destination Calabria [Radio Edit]", artist: "Alex Gaudino; Crystal Waters", albumArtist: "Alex Gaudino", track: "1/1"}},
 	)
 	assertInputUnchanged(t, environment.input, before)
 }
