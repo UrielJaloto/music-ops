@@ -224,6 +224,28 @@ func TestLazyLlamaAdvisor_StartFailure(t *testing.T) {
 	}
 }
 
+func TestLazyLlamaAdvisor_ProbeStartsServer(t *testing.T) {
+	server := &advisorServerSpy{}
+	advisor := NewLazyLlamaAdvisor(&localAdvisorStub{}, server)
+
+	report := advisor.ProbeAdvisor(context.Background())
+	_, err := advisor.SuggestCredits(context.Background(), nil)
+
+	if !report.IsAvailable || err != nil || server.starts != 1 {
+		t.Fatalf("report = %+v err = %v starts = %d", report, err, server.starts)
+	}
+}
+
+func TestLazyLlamaAdvisor_ProbeStartFailure(t *testing.T) {
+	advisor := NewLazyLlamaAdvisor(&localAdvisorStub{}, &advisorServerSpy{err: services.ErrLocalAdvisorNotInstalled})
+
+	report := advisor.ProbeAdvisor(context.Background())
+
+	if report.IsAvailable || report.Name != "local:stub" || report.Detail != services.ErrLocalAdvisorNotInstalled.Error() {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
 func TestLocalModelName(t *testing.T) {
 	if LocalModelName("") != "not-installed" || LocalModelName(filepath.Join("C:", "models", "Qwen3.5-9B-Q4_K_M.gguf")) != "Qwen3.5-9B-Q4_K_M.gguf" || LocalAdvisorURL(8089) != "http://127.0.0.1:8089" {
 		t.Fatal("unexpected local advisor naming")

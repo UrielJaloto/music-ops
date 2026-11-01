@@ -187,6 +187,9 @@ func (advisor LazyLlamaAdvisor) Name() string {
 }
 
 func (advisor LazyLlamaAdvisor) ProbeAdvisor(ctx context.Context) services.AdvisorReport {
+	if err := advisor.ensureStarted(ctx); err != nil {
+		return services.AdvisorReport{Name: advisor.Name(), Detail: err.Error()}
+	}
 	return advisor.inner.ProbeAdvisor(ctx)
 }
 
