@@ -30,7 +30,10 @@ var reservedNames = map[string]bool{
 	"lpt1": true, "lpt2": true, "lpt3": true, "lpt4": true, "lpt5": true, "lpt6": true, "lpt7": true, "lpt8": true, "lpt9": true,
 }
 
-var templatePlaceholderPattern = regexp.MustCompile(`\{[^{}]*\}`)
+var (
+	templatePlaceholderPattern = regexp.MustCompile(`\{[^{}]*\}`)
+	featuringSuffixPattern     = regexp.MustCompile(`(?i)\s*\(feat\. .*\)(\.m4a)$`)
+)
 
 func SanitizePathComponent(raw string, maxUnits int) string {
 	cleaned := collapseWhitespace(strings.Map(dropForbiddenRune, raw))
@@ -106,6 +109,7 @@ func (path TargetPath) DuplicateKey() string {
 
 func duplicateKeyOf(relative string) string {
 	name := relative[strings.LastIndexAny(relative, "/\\")+1:]
+	name = featuringSuffixPattern.ReplaceAllString(name, "$1")
 	return strings.ToLower(collapseWhitespace(name))
 }
 
