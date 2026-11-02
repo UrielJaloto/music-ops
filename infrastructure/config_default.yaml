@@ -1,5 +1,5 @@
 output:
-  dir: 'D:\Music'
+  dir: ""
   layout: flat
   album_template: "{albumartist} - {album}"
 encoder:

@@ -58,6 +58,10 @@ A batch of 20 FLAC tracks (about 1 GB) takes about 70 seconds on an 8 GB NVIDIA 
    music-ops status
    ```
 
+## Configuration
+
+Every setting lives in one file per user, `%APPDATA%\music-ops\config.yaml`, created and updated by `music-ops config set <key> <value>` (`music-ops config path` prints its location). See [config.example.yaml](config.example.yaml) for every key with its default. Nothing personal is stored in the repository.
+
 ## Usage
 
 | Command | What it does |
@@ -71,7 +75,7 @@ A batch of 20 FLAC tracks (about 1 GB) takes about 70 seconds on an 8 GB NVIDIA 
 | `music-ops version` | Prints the version, ffmpeg and the active encoder. |
 | `music-ops status` | Checks ffmpeg, the encoder, Last.fm, the advisor and the output folder. |
 
-Any setting can be overridden for one run with `--set key=value` (shortcuts: `--out`, `--layout`) or with an environment variable named after the key (`MUSIC_OPS_LASTFM_API_KEY` for `lastfm.api_key`). `--verbose` prints detailed logs and `--no-open` skips opening the report.
+Any setting can be overridden for one run with `--set key=value` (shortcuts: `--out`, `--layout`). `--verbose` prints detailed logs and `--no-open` skips opening the report.
 
 Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` cancelled with Ctrl+C, `1` the run could not start (see the message).
 
@@ -92,7 +96,7 @@ Exit codes: `0` every track published or skipped, `2` some tracks failed, `130` 
 ./test.ps1 -All
 ```
 
-`./test.ps1 -Live` runs a short import against the real Last.fm and the installed advisor; it exits with code 3 when `MUSIC_OPS_LASTFM_API_KEY` or the advisor is missing.
+`./test.ps1 -Live` runs a short import against the real Last.fm and the installed advisor; it exits with code 3 when `lastfm.api_key` or the advisor is missing from your config.
 
 ## Building
 

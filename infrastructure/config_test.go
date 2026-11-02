@@ -42,10 +42,10 @@ func writeTestFile(t *testing.T, path, content string) {
 }
 
 func TestConfigStore_Load_Defaults(t *testing.T) {
-	config, err := configStoreWithFile(t, "", nil).Load(context.Background(), nil)
+	config, err := configStoreWithFile(t, "", map[string]string{"USERPROFILE": `C:\Users\someone`}).Load(context.Background(), nil)
 
 	expected := Config{
-		Output:        OutputConfig{Dir: `D:\Music`, Layout: "flat", AlbumTemplate: "{albumartist} - {album}"},
+		Output:        OutputConfig{Dir: filepath.Join(`C:\Users\someone`, "Music"), Layout: "flat", AlbumTemplate: "{albumartist} - {album}"},
 		Encoder:       EncoderConfig{FDKLibrary: `C:\Program Files\freac\codecs\FDK-AAC.dll`},
 		LastFM:        LastFMConfig{BaseURL: "https://ws.audioscrobbler.com/2.0/"},
 		Advisor:       AdvisorConfig{Port: 8089, BatchSize: 40},
@@ -228,6 +228,24 @@ func TestConfigStore_CancelledContext(t *testing.T) {
 	}
 	if err := store.Save(ctx, "output.dir", "x"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("save err = %v", err)
+	}
+}
+
+func TestConfigStore_Load_OutputWithoutProfileStaysEmpty(t *testing.T) {
+	config, err := configStoreWithFile(t, "", nil).Load(context.Background(), nil)
+
+	if err != nil || config.Output.Dir != "" {
+		t.Fatalf("dir = %q err = %v", config.Output.Dir, err)
+	}
+}
+
+func TestConfigStore_Load_ConfiguredOutputWins(t *testing.T) {
+	store := configStoreWithFile(t, "output:\n  dir: E:/Library\n", map[string]string{"USERPROFILE": `C:\Users\someone`})
+
+	config, err := store.Load(context.Background(), nil)
+
+	if err != nil || config.Output.Dir != "E:/Library" {
+		t.Fatalf("dir = %q err = %v", config.Output.Dir, err)
 	}
 }
 

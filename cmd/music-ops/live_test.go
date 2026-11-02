@@ -15,7 +15,7 @@ import (
 
 const liveLastFMURL = "https://ws.audioscrobbler.com/2.0/"
 
-func liveAdvisor(t *testing.T) infrastructure.AdvisorConfig {
+func liveConfig(t *testing.T) infrastructure.Config {
 	t.Helper()
 	paths := infrastructure.ReadEnvironmentPaths(os.LookupEnv)
 	config, err := infrastructure.NewConfigStore(infrastructure.DefaultConfigPath(paths.AppData), os.LookupEnv).Load(context.Background(), nil)
@@ -27,15 +27,15 @@ func liveAdvisor(t *testing.T) infrastructure.AdvisorConfig {
 			t.Fatalf("local advisor is not installed (run music-ops advisor install): %q", path)
 		}
 	}
-	return config.Advisor
+	if config.LastFM.APIKey == "" {
+		t.Fatal("lastfm.api_key is not set (run music-ops config set lastfm.api_key <key>)")
+	}
+	return config
 }
 
 func TestLive_RealServices(t *testing.T) {
-	key, _ := os.LookupEnv("MUSIC_OPS_LASTFM_API_KEY")
-	if key == "" {
-		t.Fatal("MUSIC_OPS_LASTFM_API_KEY is required")
-	}
-	advisor := liveAdvisor(t)
+	config := liveConfig(t)
+	key, advisor := config.LastFM.APIKey, config.Advisor
 	environment := newE2EEnvironment(t)
 	environment.settings["lastfm.api_key"] = key
 	environment.settings["lastfm.base_url"] = liveLastFMURL
