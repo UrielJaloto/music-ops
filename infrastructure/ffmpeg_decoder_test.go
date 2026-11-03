@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 )
 
@@ -139,7 +137,7 @@ func TestFFmpegDecoder_ArgumentsGolden(t *testing.T) {
 			err := NewFFmpegDecoder(runner, "ffmpeg", testCase.capabilities).Stream(context.Background(), request, &strings.Builder{})
 
 			expected := append(append(append([]string{}, head...), testCase.expectedTail...), "-f", "s16le", "-")
-			if diff := cmp.Diff(expected, runner.requests[0].Arguments); diff != "" || err != nil {
+			if diff := differences(expected, runner.requests[0].Arguments); diff != "" || err != nil {
 				t.Fatalf("arguments (-want +got):\n%s err = %v", diff, err)
 			}
 		})

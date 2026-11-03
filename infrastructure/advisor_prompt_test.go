@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -44,7 +42,7 @@ func TestAdvisorPrompts_Golden(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.golden, func(t *testing.T) {
-			if diff := cmp.Diff(readGolden(t, testCase.golden), testCase.actual(t)); diff != "" {
+			if diff := differences(readGolden(t, testCase.golden), testCase.actual(t)); diff != "" {
 				t.Fatalf("golden (-want +got):\n%s", diff)
 			}
 		})
@@ -58,10 +56,10 @@ func TestGenreSchema_EnumsEqualDomainLists(t *testing.T) {
 	genres := properties["genre"].(map[string]any)["enum"]
 	subgenres := properties["subgenre"].(map[string]any)["enum"]
 
-	if diff := cmp.Diff(domain.GenreNames(), genres); diff != "" {
+	if diff := differences(domain.GenreNames(), genres); diff != "" {
 		t.Fatalf("genres (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(append(domain.SubgenreNames(), ""), subgenres); diff != "" {
+	if diff := differences(append(domain.SubgenreNames(), ""), subgenres); diff != "" {
 		t.Fatalf("subgenres (-want +got):\n%s", diff)
 	}
 	if item["additionalProperties"] != false || len(item["required"].([]string)) != 5 {
@@ -127,7 +125,7 @@ func TestDecodeCreditSuggestions(t *testing.T) {
 	suggestions, err := DecodeCreditSuggestions([]byte(raw), keys)
 
 	expected := []services.CreditSuggestion{{Key: "track-a", Title: "Song", Artists: []string{"A", "X"}}}
-	if diff := cmp.Diff(expected, suggestions); diff != "" || err != nil {
+	if diff := differences(expected, suggestions); diff != "" || err != nil {
 		t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 	}
 }
@@ -143,7 +141,7 @@ func TestDecodeGenreSuggestions(t *testing.T) {
 	suggestions, err := DecodeGenreSuggestions([]byte(raw), keys)
 
 	expected := []services.GenreSuggestion{{Key: "k1", Genre: "Rock", Subgenre: "Metal", IsKnown: true}}
-	if diff := cmp.Diff(expected, suggestions); diff != "" || err != nil {
+	if diff := differences(expected, suggestions); diff != "" || err != nil {
 		t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 	}
 }

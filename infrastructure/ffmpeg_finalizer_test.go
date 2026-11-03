@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -35,7 +33,7 @@ func TestFFmpegFinalizer_ArgumentsGolden(t *testing.T) {
 
 			expected := append([]string{"-hide_banner", "-nostdin", "-y", "-i", "s.m4a"}, testCase.middle...)
 			expected = append(append(expected, tagArguments...), "-f", "mp4", "-movflags", "+faststart", destination+".tmp")
-			if diff := cmp.Diff(expected, runner.arguments); diff != "" || err != nil || !isFile(destination) {
+			if diff := differences(expected, runner.arguments); diff != "" || err != nil || !isFile(destination) {
 				t.Fatalf("arguments (-want +got):\n%s err = %v", diff, err)
 			}
 		})
@@ -48,7 +46,7 @@ func TestMetadataArguments_AllFieldsInOrder(t *testing.T) {
 	arguments := metadataArguments(metadata)
 
 	expected := []string{"-metadata", "title=T", "-metadata", "artist=A", "-metadata", "album_artist=AA", "-metadata", "album=Al", "-metadata", "genre=G", "-metadata", "track=1/2", "-metadata", "disc=1/1", "-metadata", "date=2024", "-metadata", "composer=C", "-metadata", "copyright=Co"}
-	if diff := cmp.Diff(expected, arguments); diff != "" {
+	if diff := differences(expected, arguments); diff != "" {
 		t.Fatalf("arguments (-want +got):\n%s", diff)
 	}
 }
@@ -56,7 +54,7 @@ func TestMetadataArguments_AllFieldsInOrder(t *testing.T) {
 func TestMetadataArguments_EmptyAndBlankOmitted(t *testing.T) {
 	arguments := metadataArguments(domain.TrackMetadata{Title: "T", Artist: " ", Album: "\r\n"})
 
-	if diff := cmp.Diff([]string{"-metadata", "title=T"}, arguments); diff != "" {
+	if diff := differences([]string{"-metadata", "title=T"}, arguments); diff != "" {
 		t.Fatalf("arguments (-want +got):\n%s", diff)
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"golang.org/x/time/rate"
 
 	"github.com/UrielJaloto/music-ops/services"
@@ -63,7 +62,7 @@ func TestLastFMClient_ArtistTags_HappyPathAndNoiseFiltering(t *testing.T) {
 	tags, err := client.ArtistTags(context.Background(), "Queen")
 
 	expected := []string{"rock", "classic rock", "british", "glam rock", "hard rock"}
-	if diff := cmp.Diff(expected, tags); diff != "" || err != nil {
+	if diff := differences(expected, tags); diff != "" || err != nil {
 		t.Fatalf("tags (-want +got):\n%s err = %v", diff, err)
 	}
 	query := server.queries[0]
@@ -119,7 +118,7 @@ func TestLastFMClient_Outcomes(t *testing.T) {
 			if !errors.Is(err, testCase.expectedError) || len(server.queries) != testCase.expectedCalls || len(backoff.waits) != testCase.expectedCalls-1 {
 				t.Fatalf("err = %v calls = %d waits = %v", err, len(server.queries), backoff.waits)
 			}
-			if diff := cmp.Diff(testCase.expectedTags, tags); testCase.expectedError == nil && diff != "" {
+			if diff := differences(testCase.expectedTags, tags); testCase.expectedError == nil && diff != "" {
 				t.Fatalf("tags (-want +got):\n%s", diff)
 			}
 		})

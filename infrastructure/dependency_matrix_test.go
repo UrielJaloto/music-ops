@@ -3,13 +3,16 @@ package infrastructure
 import (
 	"fmt"
 	"go/ast"
+	"go/build"
+	"go/importer"
+	"go/parser"
+	"go/token"
 	"go/types"
+	"io/fs"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
-
-	"golang.org/x/tools/go/packages"
 )
 
 const modulePath = "github.com/UrielJaloto/music-ops"
@@ -55,10 +58,9 @@ var allowedDomainContextDependencies = map[string][]string{
 }
 
 func TestLayerDependencies_AreLowerTriangular(t *testing.T) {
-	loaded := loadModulePackages(t)
-	edges := make([]dependencyEdge, 0, len(loaded))
-	for _, loadedPackage := range loaded {
-		edges = append(edges, layerEdges(t, loadedPackage)...)
+	var edges []dependencyEdge
+	for _, imported := range moduleImports(t) {
+		edges = append(edges, layerEdges(t, imported)...)
 	}
 
 	violations := findViolations(allowedLayerDependencies, edges)
@@ -67,7 +69,7 @@ func TestLayerDependencies_AreLowerTriangular(t *testing.T) {
 }
 
 func TestDomainContextDependencies_FollowDeclaredOrder(t *testing.T) {
-	domainPackage := findLoadedPackage(t, loadModulePackages(t), "domain")
+	domainPackage := loadTypedPackage(t, "domain")
 	edges := crossFileEdges(domainPackage, func(types.Object) bool { return true })
 	contextEdges := make([]dependencyEdge, 0, len(edges))
 	for _, edge := range edges {
@@ -80,7 +82,7 @@ func TestDomainContextDependencies_FollowDeclaredOrder(t *testing.T) {
 }
 
 func TestServices_DoNotReferenceOtherServices(t *testing.T) {
-	servicesPackage := findLoadedPackage(t, loadModulePackages(t), "services")
+	servicesPackage := loadTypedPackage(t, "services")
 
 	edges := crossFileEdges(servicesPackage, isServiceInternalReference)
 
@@ -158,31 +160,61 @@ func isAllowedEdge(allowed map[string][]string, edge dependencyEdge) bool {
 	return false
 }
 
-func loadModulePackages(t *testing.T) []*packages.Package {
-	t.Helper()
-	config := &packages.Config{
-		Mode: packages.NeedName | packages.NeedImports | packages.NeedFiles | packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
-		Dir:  "..",
-	}
-	loaded, err := packages.Load(config, "./...")
-	if err != nil {
-		t.Fatalf("loading packages: %v", err)
-	}
-	if packages.PrintErrors(loaded) > 0 {
-		t.Fatal("packages have errors")
-	}
-	return loaded
+type typedPackage struct {
+	fileSet *token.FileSet
+	syntax  []*ast.File
+	types   *types.Package
+	info    *types.Info
 }
 
-func findLoadedPackage(t *testing.T, loaded []*packages.Package, layer string) *packages.Package {
+func moduleImports(t *testing.T) []*build.Package {
 	t.Helper()
-	for _, loadedPackage := range loaded {
-		if packageLayer(loadedPackage.PkgPath) == layer {
-			return loadedPackage
+	var imported []*build.Package
+	err := filepath.WalkDir("..", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
+		if !entry.IsDir() {
+			return nil
+		}
+		if strings.HasPrefix(entry.Name(), ".") && path != ".." {
+			return filepath.SkipDir
+		}
+		found, err := build.ImportDir(path, 0)
+		if err == nil {
+			relative, _ := filepath.Rel("..", path)
+			found.ImportPath = modulePath + "/" + filepath.ToSlash(relative)
+			imported = append(imported, found)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking packages: %v", err)
 	}
-	t.Fatalf("package %s not found", layer)
-	return nil
+	return imported
+}
+
+func loadTypedPackage(t *testing.T, layer string) typedPackage {
+	t.Helper()
+	folder := filepath.Join("..", layer)
+	found, err := build.ImportDir(folder, 0)
+	if err != nil {
+		t.Fatalf("reading package %s: %v", layer, err)
+	}
+	loaded := typedPackage{fileSet: token.NewFileSet(), info: &types.Info{Uses: map[*ast.Ident]types.Object{}}}
+	for _, name := range found.GoFiles {
+		file, err := parser.ParseFile(loaded.fileSet, filepath.Join(folder, name), nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", name, err)
+		}
+		loaded.syntax = append(loaded.syntax, file)
+	}
+	config := types.Config{Importer: importer.ForCompiler(loaded.fileSet, "source", nil)}
+	loaded.types, err = config.Check(modulePath+"/"+layer, loaded.fileSet, loaded.syntax, loaded.info)
+	if err != nil {
+		t.Fatalf("type-checking %s: %v", layer, err)
+	}
+	return loaded
 }
 
 func packageLayer(packagePath string) string {
@@ -190,11 +222,11 @@ func packageLayer(packagePath string) string {
 	return strings.Split(relative, "/")[0]
 }
 
-func layerEdges(t *testing.T, loadedPackage *packages.Package) []dependencyEdge {
+func layerEdges(t *testing.T, imported *build.Package) []dependencyEdge {
 	t.Helper()
-	layer := packageLayer(loadedPackage.PkgPath)
+	layer := packageLayer(imported.ImportPath)
 	var edges []dependencyEdge
-	for importPath := range loadedPackage.Imports {
+	for _, importPath := range imported.Imports {
 		if strings.HasPrefix(importPath, modulePath) {
 			edges = append(edges, dependencyEdge{from: layer, to: packageLayer(importPath)})
 			continue
@@ -221,27 +253,27 @@ func isStandardLibrary(importPath string) bool {
 	return !strings.Contains(strings.Split(importPath, "/")[0], ".")
 }
 
-func crossFileEdges(loadedPackage *packages.Package, isRelevant func(types.Object) bool) []dependencyEdge {
-	edges := make([]dependencyEdge, 0, len(loadedPackage.Syntax))
-	for _, file := range loadedPackage.Syntax {
-		fromFile := filepath.Base(loadedPackage.Fset.Position(file.Pos()).Filename)
+func crossFileEdges(loadedPackage typedPackage, isRelevant func(types.Object) bool) []dependencyEdge {
+	edges := make([]dependencyEdge, 0, len(loadedPackage.syntax))
+	for _, file := range loadedPackage.syntax {
+		fromFile := filepath.Base(loadedPackage.fileSet.Position(file.Pos()).Filename)
 		edges = append(edges, fileEdges(loadedPackage, file, fromFile, isRelevant)...)
 	}
 	return uniqueEdges(edges)
 }
 
-func fileEdges(loadedPackage *packages.Package, file *ast.File, fromFile string, isRelevant func(types.Object) bool) []dependencyEdge {
+func fileEdges(loadedPackage typedPackage, file *ast.File, fromFile string, isRelevant func(types.Object) bool) []dependencyEdge {
 	var edges []dependencyEdge
 	ast.Inspect(file, func(node ast.Node) bool {
 		identifier, isIdentifier := node.(*ast.Ident)
 		if !isIdentifier {
 			return true
 		}
-		object := loadedPackage.TypesInfo.Uses[identifier]
-		if object == nil || object.Pkg() != loadedPackage.Types || !isRelevant(object) {
+		object := loadedPackage.info.Uses[identifier]
+		if object == nil || object.Pkg() != loadedPackage.types || !isRelevant(object) {
 			return true
 		}
-		toFile := filepath.Base(loadedPackage.Fset.Position(object.Pos()).Filename)
+		toFile := filepath.Base(loadedPackage.fileSet.Position(object.Pos()).Filename)
 		if toFile != fromFile {
 			edges = append(edges, dependencyEdge{from: fromFile, to: toFile})
 		}

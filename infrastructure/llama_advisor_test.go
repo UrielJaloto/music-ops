@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -105,7 +103,7 @@ func TestLlamaAdvisor_RequestBody(t *testing.T) {
 	if format["type"] != "json_schema" || schema["name"] != "credit_suggestions" || schema["strict"] != true || schema["schema"] == nil {
 		t.Fatalf("response format = %v", format)
 	}
-	if diff := cmp.Diff(map[string]any{"enable_thinking": false}, body["chat_template_kwargs"]); diff != "" {
+	if diff := differences(map[string]any{"enable_thinking": false}, body["chat_template_kwargs"]); diff != "" {
 		t.Fatalf("kwargs (-want +got):\n%s", diff)
 	}
 	messages := body["messages"].([]any)
@@ -120,7 +118,7 @@ func TestLlamaAdvisor_SuggestCredits_RemapsKeys(t *testing.T) {
 	suggestions, err := advisor.SuggestCredits(context.Background(), creditRequests(2))
 
 	expected := []services.CreditSuggestion{{Key: "id-0", Title: "Clean Song 0", Artists: []string{"Artist"}}, {Key: "id-1", Title: "Clean Song 1", Artists: []string{"Artist"}}}
-	if diff := cmp.Diff(expected, suggestions); diff != "" || err != nil {
+	if diff := differences(expected, suggestions); diff != "" || err != nil {
 		t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 	}
 }
@@ -134,7 +132,7 @@ func TestLlamaAdvisor_SuggestGenres(t *testing.T) {
 	suggestions, err := advisor.SuggestGenres(context.Background(), []services.GenreRequest{{Key: "song-1", Title: "Iron Man", Artists: []string{"Black Sabbath"}, Tags: []string{"metal"}}})
 
 	expected := []services.GenreSuggestion{{Key: "song-1", Genre: "Rock", Subgenre: "Metal", IsKnown: true}}
-	if diff := cmp.Diff(expected, suggestions); diff != "" || err != nil || server.requests[0].ResponseFormat.JSONSchema.Name != "genre_suggestions" {
+	if diff := differences(expected, suggestions); diff != "" || err != nil || server.requests[0].ResponseFormat.JSONSchema.Name != "genre_suggestions" {
 		t.Fatalf("suggestions (-want +got):\n%s err = %v", diff, err)
 	}
 }

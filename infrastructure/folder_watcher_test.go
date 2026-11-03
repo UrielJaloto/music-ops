@@ -10,8 +10,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 const arrivalTimeout = 5 * time.Second
@@ -103,7 +101,7 @@ func TestFolderWatcher_Existing_SkipsIgnoredNames(t *testing.T) {
 	folders, err := NewFolderWatcher(newControlledClock()).Existing(context.Background(), inbox)
 
 	expected := []string{filepath.Join(inbox, "a-album"), filepath.Join(inbox, "b-album")}
-	if diff := cmp.Diff(expected, folders); diff != "" || err != nil {
+	if diff := differences(expected, folders); diff != "" || err != nil {
 		t.Fatalf("folders (-want +got):\n%s err = %v", diff, err)
 	}
 }
@@ -262,7 +260,7 @@ func TestFolderArchiver_Archive_NameCollisions(t *testing.T) {
 		archived = append(archived, entry.Name())
 	}
 
-	if diff := cmp.Diff([]string{"Album", "Album (2)", "Album (3)"}, archived); diff != "" || pathExists(filepath.Join(inbox, "Album")) {
+	if diff := differences([]string{"Album", "Album (2)", "Album (3)"}, archived); diff != "" || pathExists(filepath.Join(inbox, "Album")) {
 		t.Fatalf("archived (-want +got):\n%s", diff)
 	}
 }

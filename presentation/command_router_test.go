@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/services"
 )
 
@@ -76,7 +74,7 @@ func TestCommandRouter_RoutesEveryCommand(t *testing.T) {
 			if code != spy.code || spy.calls != 1 || output.Len() != 0 {
 				t.Fatalf("code = %d calls = %d output = %q", code, spy.calls, output.String())
 			}
-			if diff := cmp.Diff(testCase.expectedArguments, spy.arguments); diff != "" {
+			if diff := differences(testCase.expectedArguments, spy.arguments); diff != "" {
 				t.Fatalf("arguments (-want +got):\n%s", diff)
 			}
 		})
@@ -152,7 +150,7 @@ func TestParseCommandLine_Flags(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			request, err := ParseCommandLine(testCase.arguments)
 
-			if diff := cmp.Diff(testCase.expected, request); diff != "" || err != nil {
+			if diff := differences(testCase.expected, request); diff != "" || err != nil {
 				t.Fatalf("request (-want +got):\n%s err = %v", diff, err)
 			}
 		})

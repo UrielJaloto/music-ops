@@ -20,9 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const defaultFDKLibrary = `C:\Program Files\freac\codecs\FDK-AAC.dll`
@@ -265,7 +262,7 @@ func libraryFiles(t *testing.T, root string) []string {
 func assertTree(t *testing.T, root string, expected ...string) {
 	t.Helper()
 	sort.Strings(expected)
-	if diff := cmp.Diff(expected, libraryFiles(t, root), cmpopts.EquateEmpty()); diff != "" {
+	if diff := differences(append([]string{}, expected...), libraryFiles(t, root)); diff != "" {
 		t.Fatalf("library tree (-want +got):\n%s", diff)
 	}
 }
@@ -314,7 +311,7 @@ func (environment *e2eEnvironment) assertTags(expected ...expectedTrack) {
 	for _, track := range expected {
 		tags := lowerKeys(environment.probe(filepath.Join(environment.output, filepath.FromSlash(track.path))).Format.Tags)
 		actual := expectedTrack{path: track.path, title: tags["title"], artist: tags["artist"], albumArtist: tags["album_artist"], genre: tags["genre"], track: tags["track"]}
-		if diff := cmp.Diff(track, actual, cmp.AllowUnexported(expectedTrack{})); diff != "" {
+		if diff := differences(track, actual); diff != "" {
 			environment.t.Errorf("tags of %s (-want +got):\n%s", track.path, diff)
 		}
 	}
@@ -367,7 +364,7 @@ func snapshotHashes(t *testing.T, root string) map[string]string {
 
 func assertInputUnchanged(t *testing.T, root string, before map[string]string) {
 	t.Helper()
-	if diff := cmp.Diff(before, snapshotHashes(t, root)); diff != "" {
+	if diff := differences(before, snapshotHashes(t, root)); diff != "" {
 		t.Fatalf("input changed (-before +after):\n%s", diff)
 	}
 }

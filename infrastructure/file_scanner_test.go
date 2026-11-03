@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/services"
 )
 
@@ -42,10 +40,10 @@ func TestFileScanner_FindAudioFiles_MixedTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]string{"a/track.mp3", "b/song.FLAC", "c/deep/x.Opus"}, relativePathsOf(found.Audio)); diff != "" {
+	if diff := differences([]string{"a/track.mp3", "b/song.FLAC", "c/deep/x.Opus"}, relativePathsOf(found.Audio)); diff != "" {
 		t.Fatalf("audio (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff([]string{"a/cover.jpg", "notes.txt"}, found.Ignored); diff != "" {
+	if diff := differences([]string{"a/cover.jpg", "notes.txt"}, found.Ignored); diff != "" {
 		t.Fatalf("ignored (-want +got):\n%s", diff)
 	}
 	first := found.Audio[0]
@@ -142,7 +140,7 @@ func TestLibraryIndex_ListTrackPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff([]string{"Album/01 - Intro.M4A", "Artist - Song.m4a"}, paths); diff != "" {
+	if diff := differences([]string{"Album/01 - Intro.M4A", "Artist - Song.m4a"}, paths); diff != "" {
 		t.Fatalf("paths (-want +got):\n%s", diff)
 	}
 }

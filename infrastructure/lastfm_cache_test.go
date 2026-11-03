@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 type memoryByteCache struct {
@@ -59,7 +57,7 @@ func TestLastFMCache_HitMakesNoCalls(t *testing.T) {
 	if firstErr != nil || secondErr != nil || artistErr != nil || inner.calls != 2 {
 		t.Fatalf("calls = %d errors = %v %v %v", inner.calls, firstErr, secondErr, artistErr)
 	}
-	if diff := cmp.Diff([][]string{{"rock"}, {"rock"}, {"rock"}, {"rock"}}, [][]string{first, second, artist, artistAgain}); diff != "" {
+	if diff := differences([][]string{{"rock"}, {"rock"}, {"rock"}, {"rock"}}, [][]string{first, second, artist, artistAgain}); diff != "" {
 		t.Fatalf("results (-want +got):\n%s", diff)
 	}
 	if cache.ttls["lastfm/track\x1fac/dc\x1ft.n.t."] != 30*24*time.Hour {

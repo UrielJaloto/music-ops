@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/UrielJaloto/music-ops/domain"
 	"github.com/UrielJaloto/music-ops/services"
 )
@@ -96,7 +94,7 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 	code := NewRunCommand(controller).Execute(context.Background(), []string{"D:/In"})
 
 	expected := services.ImportInput{Folder: "D:/In", Output: "E:/Music", Profile: domain.NewEncodingProfile(domain.EngineFDK), Numbering: domain.NumberingPerDirectory, Layout: domain.LayoutFlat, AlbumTemplate: "{album}"}
-	if diff := cmp.Diff([]services.ImportInput{expected}, fixture.service.importInputs, cmp.AllowUnexported(domain.EncodingProfile{})); diff != "" {
+	if diff := differences([]services.ImportInput{expected}, fixture.service.importInputs); diff != "" {
 		t.Fatalf("input (-want +got):\n%s", diff)
 	}
 	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: C:/Local/music-ops/runs/r1/report.md") {
