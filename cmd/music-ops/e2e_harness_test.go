@@ -215,7 +215,7 @@ func exitCodeOf(err error) int {
 }
 
 func (environment *e2eEnvironment) reportPaths() []string {
-	matches, _ := filepath.Glob(filepath.Join(environment.output, ".music-ops", "runs", "*", "report.json"))
+	matches, _ := filepath.Glob(filepath.Join(environment.localAppData, "music-ops", "runs", "*", "report.json"))
 	return matches
 }
 
@@ -248,9 +248,6 @@ func libraryFiles(t *testing.T, root string) []string {
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
-		}
-		if entry.IsDir() && entry.Name() == ".music-ops" {
-			return filepath.SkipDir
 		}
 		if !entry.IsDir() {
 			relative, _ := filepath.Rel(root, path)

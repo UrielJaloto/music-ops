@@ -11,11 +11,11 @@ import (
 const runsFolderName = "runs"
 
 type ReportStorage struct {
-	output string
+	workRoot string
 }
 
-func NewReportStorage(output string) ReportStorage {
-	return ReportStorage{output: output}
+func NewReportStorage(workRoot string) ReportStorage {
+	return ReportStorage{workRoot: workRoot}
 }
 
 func (storage ReportStorage) Create(ctx context.Context, runID, name string) (io.WriteCloser, error) {
@@ -38,5 +38,5 @@ func (storage ReportStorage) Location(runID, name string) string {
 }
 
 func (storage ReportStorage) runFolder(runID string) string {
-	return filepath.Join(storage.output, workFolderName, runsFolderName, runID)
+	return filepath.Join(storage.workRoot, runsFolderName, runID)
 }

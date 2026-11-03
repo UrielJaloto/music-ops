@@ -45,7 +45,7 @@ func (destination *memoryReportDestination) Create(_ context.Context, runID, nam
 }
 
 func (destination *memoryReportDestination) Location(runID, name string) string {
-	return "E:/Music/.music-ops/runs/" + runID + "/" + name
+	return "C:/Local/music-ops/runs/" + runID + "/" + name
 }
 
 func sampleImportOutput() services.ImportOutput {
@@ -83,7 +83,7 @@ func TestReportPresenter_Golden(t *testing.T) {
 
 	path, err := NewReportPresenter(destination).Present(context.Background(), sampleImportOutput())
 
-	if err != nil || path != "E:/Music/.music-ops/runs/20261016-083005-abcd/report.md" {
+	if err != nil || path != "C:/Local/music-ops/runs/20261016-083005-abcd/report.md" {
 		t.Fatalf("path = %s err = %v", path, err)
 	}
 	assertGolden(t, "report.md.golden", destination.files["20261016-083005-abcd/report.md"].String())

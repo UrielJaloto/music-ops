@@ -19,7 +19,6 @@ import (
 const (
 	applicationFolder   = "music-ops"
 	advisorFolder       = "advisor"
-	workFolder          = ".music-ops"
 	stateFileName       = "state.db"
 	logFileName         = "log.jsonl"
 	shortHTTPTimeout    = 30 * time.Second
@@ -29,6 +28,8 @@ const (
 	bitsPerKilobit      = 1000
 	versionEngineFormat = "%s %d kb/s"
 )
+
+var errWorkFolderUnknown = errors.New("LOCALAPPDATA is not set: cannot locate the work folder")
 
 type wiringSettings struct {
 	config      infrastructure.Config
@@ -198,16 +199,19 @@ type storageStack struct {
 }
 
 func (application *wiring) newStorage(ctx context.Context) (storageStack, error) {
-	output := application.settings.config.Output.Dir
+	if application.settings.paths.LocalAppData == "" {
+		return storageStack{}, errWorkFolderUnknown
+	}
+	workRoot := filepath.Join(application.settings.paths.LocalAppData, applicationFolder)
 	runID, err := infrastructure.NewRandomRunIDs().NewRunID(application.clock.Now())
 	if err != nil {
 		return storageStack{}, err
 	}
-	staging, err := infrastructure.PrepareStagingArea(output, runID)
+	staging, err := infrastructure.PrepareStagingArea(workRoot, runID)
 	if err != nil {
 		return storageStack{}, err
 	}
-	store, err := infrastructure.OpenBoltStore(filepath.Join(output, workFolder, stateFileName))
+	store, err := infrastructure.OpenBoltStore(filepath.Join(workRoot, stateFileName))
 	if err != nil {
 		return storageStack{}, errors.Join(err, staging.Cleanup(ctx))
 	}
@@ -216,7 +220,7 @@ func (application *wiring) newStorage(ctx context.Context) (storageStack, error)
 	if err := staging.RemoveOtherRuns(); err != nil {
 		return storageStack{}, err
 	}
-	reports := infrastructure.NewReportStorage(output)
+	reports := infrastructure.NewReportStorage(workRoot)
 	logs, err := reports.Create(ctx, string(runID), logFileName)
 	if err != nil {
 		return storageStack{}, err
