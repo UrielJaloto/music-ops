@@ -8,18 +8,39 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: windows-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+    runs-on: ubuntu-latest
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: '0'
+      BINARY: music-ops-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - name: Build
-        shell: pwsh
-        run: ./build/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart("v")
-      - name: Publish release
-        shell: pwsh
-        env:
+      - run: go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v}" -o "dist/$BINARY" ./cmd/music-ops
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY }}
+          path: dist/${{ env.BINARY }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum * > checksums.txt
+      - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME dist/music-ops.exe dist/checksums.txt --title $env:GITHUB_REF_NAME --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
