@@ -70,8 +70,8 @@ func TestCopyWithProgress_Failures(t *testing.T) {
 	errRead := errors.New("read")
 	downloader := NewHTTPArtifactDownloader(http.DefaultClient, &progressSpy{})
 
-	writeErr := downloader.copyWithProgress(failingWriter{}, strings.NewReader("x"), 0, "model")
-	readErr := downloader.copyWithProgress(io.Discard, iotest.ErrReader(errRead), 0, "model")
+	writeErr := downloader.copyWithProgress(failingWriter{}, strings.NewReader("x"), partialDownload{name: "model"})
+	readErr := downloader.copyWithProgress(io.Discard, iotest.ErrReader(errRead), partialDownload{name: "model"})
 
 	if !errors.Is(writeErr, errWrite) || !errors.Is(readErr, errRead) || readErr.Error() != "downloading model: read" {
 		t.Fatalf("errors = %v %v", writeErr, readErr)

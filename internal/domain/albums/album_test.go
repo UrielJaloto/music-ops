@@ -2,6 +2,7 @@ package albums
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -178,7 +179,7 @@ func TestCompareNatural(t *testing.T) {
 }
 
 func TestExtractSourceFileName(t *testing.T) {
-	tracks := resolvedTracks(t, []albumTrackSpec{{path: `C:\Music\Album\01 Song.flac`}, {path: "Song.flac"}})
+	tracks := resolvedTracks(t, []albumTrackSpec{{path: filepath.Join("Music", "Album", "01 Song.flac")}, {path: "Song.flac"}})
 
 	names := []string{extractSourceFileName(tracks[0]), extractSourceFileName(tracks[1])}
 

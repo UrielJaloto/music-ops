@@ -207,14 +207,24 @@ func (service GenreService) adviseGenres(ctx context.Context, tracks []GenreTrac
 			return nil, nil, err
 		}
 		end := min(start+service.batchSize, len(tracks))
-		suggestions, batchErr := service.advisor.SuggestGenres(ctx, toGenreRequests(tracks[start:end], evidence[start:end]))
-		for index := start; index < end; index++ {
-			classification, warning := chooseClassification(tracks[index], evidence[index], suggestions, batchErr)
-			classifications = append(classifications, classification)
-			warnings = appendWarning(warnings, warning)
-		}
+		chosen, batchWarnings := service.classifyBatch(ctx, tracks[start:end], evidence[start:end])
+		classifications = append(classifications, chosen...)
+		warnings = append(warnings, batchWarnings...)
 	}
 	return classifications, warnings, nil
+}
+
+func (service GenreService) classifyBatch(ctx context.Context, tracks []GenreTrack, evidence []genres.TagEvidence) ([]genres.Classification, []string) {
+	suggestions, batchErr := service.advisor.SuggestGenres(ctx, toGenreRequests(tracks, evidence))
+	batch := genreBatch{suggestions: suggestions, err: batchErr}
+	classifications := make([]genres.Classification, 0, len(tracks))
+	warnings := []string{}
+	for index, track := range tracks {
+		classification, warning := batch.chooseClassification(track, evidence[index])
+		classifications = append(classifications, classification)
+		warnings = appendWarning(warnings, warning)
+	}
+	return classifications, warnings
 }
 
 func toGenreRequests(tracks []GenreTrack, evidence []genres.TagEvidence) []GenreRequest {
@@ -231,8 +241,13 @@ func toGenreRequests(tracks []GenreTrack, evidence []genres.TagEvidence) []Genre
 	return requests
 }
 
-func chooseClassification(track GenreTrack, evidence genres.TagEvidence, suggestions []GenreSuggestion, batchErr error) (genres.Classification, string) {
-	classification, err := suggestedClassification(track, suggestions, batchErr)
+type genreBatch struct {
+	suggestions []GenreSuggestion
+	err         error
+}
+
+func (batch genreBatch) chooseClassification(track GenreTrack, evidence genres.TagEvidence) (genres.Classification, string) {
+	classification, err := suggestedClassification(track, batch.suggestions, batch.err)
 	if err == nil {
 		return classification, ""
 	}

@@ -19,14 +19,14 @@ func newMemoryByteCache() *memoryByteCache {
 	return &memoryByteCache{values: map[string][]byte{}, ttls: map[string]time.Duration{}}
 }
 
-func (cache *memoryByteCache) Get(_ context.Context, bucket, key string) ([]byte, bool, error) {
-	value, isFound := cache.values[bucket+"/"+key]
+func (cache *memoryByteCache) Get(_ context.Context, key string) ([]byte, bool, error) {
+	value, isFound := cache.values[key]
 	return value, isFound, cache.err
 }
 
-func (cache *memoryByteCache) Put(_ context.Context, bucket, key string, value []byte, ttl time.Duration) error {
-	cache.values[bucket+"/"+key] = value
-	cache.ttls[bucket+"/"+key] = ttl
+func (cache *memoryByteCache) Put(_ context.Context, key string, value []byte, ttl time.Duration) error {
+	cache.values[key] = value
+	cache.ttls[key] = ttl
 	return nil
 }
 
@@ -62,7 +62,7 @@ func TestLastFMCache_HitMakesNoCalls(t *testing.T) {
 	if diff := differences([][]string{{"rock"}, {"rock"}, {"rock"}, {"rock"}}, [][]string{first, second, artist, artistAgain}); diff != "" {
 		t.Fatalf("results (-want +got):\n%s", diff)
 	}
-	if cache.ttls["lastfm/track\x1fac/dc\x1ft.n.t."] != 30*24*time.Hour {
+	if cache.ttls["track\x1fac/dc\x1ft.n.t."] != 30*24*time.Hour {
 		t.Fatalf("ttls = %v", cache.ttls)
 	}
 }
@@ -73,7 +73,7 @@ func TestLastFMCache_EmptyResultHasShorterTTL(t *testing.T) {
 
 	tags, err := decorator.FetchArtistTags(context.Background(), "Unknown")
 
-	if err != nil || len(tags) != 0 || cache.ttls["lastfm/artist\x1funknown"] != 3*24*time.Hour {
+	if err != nil || len(tags) != 0 || cache.ttls["artist\x1funknown"] != 3*24*time.Hour {
 		t.Fatalf("tags = %v ttls = %v err = %v", tags, cache.ttls, err)
 	}
 }
@@ -97,7 +97,7 @@ func TestLastFMCache_CacheFailures(t *testing.T) {
 	failing := newMemoryByteCache()
 	failing.err = errStore
 	corrupt := newMemoryByteCache()
-	corrupt.values["lastfm/artist\x1fa"] = []byte("{")
+	corrupt.values["artist\x1fa"] = []byte("{")
 
 	_, getErr := NewLastFMCache(&tagSourceSpy{}, failing).FetchArtistTags(context.Background(), "A")
 	_, decodeErr := NewLastFMCache(&tagSourceSpy{}, corrupt).FetchArtistTags(context.Background(), "A")

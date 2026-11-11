@@ -8,28 +8,11 @@ import (
 )
 
 const (
-	AdvisorServerExecutable = "llama-server.exe"
 	AdvisorModelName        = "Qwen3.5-9B-Q4_K_M"
-	llamaReleaseBase        = "https://github.com/ggml-org/llama.cpp/releases/download/b11606/"
+	AdvisorServerExecutable = advisorServerName + executableSuffix
+	advisorServerName       = "llama-server"
 	modelRepositoryBase     = "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/"
 )
-
-func BuildAdvisorRuntimeArtifacts() []setup.ArtifactRequest {
-	return []setup.ArtifactRequest{
-		{
-			Name:      "llama-b11606-bin-win-cuda-13.4-x64.zip",
-			URL:       llamaReleaseBase + "llama-b11606-bin-win-cuda-13.4-x64.zip",
-			SHA256:    "93ba7c16d1ad8343248d540bb4c06e7e18f7d0601e762d6952bad13628295be8",
-			SizeBytes: 153479124,
-		},
-		{
-			Name:      "cudart-llama-bin-win-cuda-13.4-x64.zip",
-			URL:       llamaReleaseBase + "cudart-llama-bin-win-cuda-13.4-x64.zip",
-			SHA256:    "738f8c251ac22b70c3ae6f83a10cf222725df0395246a2cf58f32bdb85fbe668",
-			SizeBytes: 423535356,
-		},
-	}
-}
 
 func BuildAdvisorModelArtifact() setup.ArtifactRequest {
 	return setup.ArtifactRequest{

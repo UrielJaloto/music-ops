@@ -2,6 +2,7 @@ package library
 
 import (
 	"errors"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,7 +86,7 @@ func TestLibraryAdmit(t *testing.T) {
 		{
 			name: "DUP2_ExistingFileWins", existing: []string{"Band - Song.m4a"},
 			specs:    []candidateSpec{flacSpec("a.flac")},
-			expected: map[string]string{"a.flac": "lib/Band - Song.m4a"},
+			expected: map[string]string{"a.flac": filepath.FromSlash("lib/Band - Song.m4a")},
 		},
 		{
 			name:     "DUP3_LosslessBeatsLossy",
@@ -162,7 +163,7 @@ func TestLibraryAdmit_NotReadyTracksIgnored(t *testing.T) {
 	err = NewLibrary([]string{"Band - Song.m4a"}, "lib").Admit([]*tracks.Track{&discovered, ready})
 
 	mustSucceed(t, err)
-	if discovered.Status() != tracks.StatusDiscovered || ready.Outcome().KeeperPath != "lib/Band - Song.m4a" {
+	if discovered.Status() != tracks.StatusDiscovered || ready.Outcome().KeeperPath != filepath.FromSlash("lib/Band - Song.m4a") {
 		t.Fatalf("discovered = %v ready keeper = %q", discovered.Status(), ready.Outcome().KeeperPath)
 	}
 }

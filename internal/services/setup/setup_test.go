@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -19,7 +20,7 @@ type downloaderSpy struct {
 }
 
 func (spy *downloaderSpy) Download(_ context.Context, artifact ArtifactRequest, destination string) error {
-	spy.recorder.events = append(spy.recorder.events, "download "+artifact.Name+" -> "+destination)
+	spy.recorder.events = append(spy.recorder.events, "download "+artifact.Name+" -> "+filepath.ToSlash(destination))
 	if artifact.Name == spy.failOn {
 		return errTechnical
 	}
@@ -32,7 +33,7 @@ type extractorSpy struct {
 }
 
 func (spy *extractorSpy) Extract(_ context.Context, archive, destination string) error {
-	spy.recorder.events = append(spy.recorder.events, "extract "+archive+" -> "+destination)
+	spy.recorder.events = append(spy.recorder.events, "extract "+filepath.ToSlash(archive)+" -> "+filepath.ToSlash(destination))
 	return spy.err
 }
 
@@ -42,7 +43,7 @@ type setupSettingsSpy struct {
 }
 
 func (spy *setupSettingsSpy) Save(_ context.Context, key, value string) error {
-	spy.recorder.events = append(spy.recorder.events, "save "+key+"="+value)
+	spy.recorder.events = append(spy.recorder.events, "save "+key+"="+filepath.ToSlash(value))
 	if key == spy.failKey {
 		return errTechnical
 	}
@@ -84,6 +85,8 @@ func setupInput() InstallAdvisorInput {
 		Folder:  "C:/advisor/",
 		Runtime: []ArtifactRequest{{Name: "llama.zip", URL: "https://example/llama.zip"}, {Name: "cudart.zip", URL: "https://example/cudart.zip"}},
 		Model:   ArtifactRequest{Name: "model.gguf", URL: "https://example/model.gguf"},
+
+		ServerExecutableName: "llama-server.exe",
 	}
 }
 
@@ -104,7 +107,7 @@ func TestSetupService_InstallAdvisor_HappyPath(t *testing.T) {
 	if err != nil || !slices.Equal(doubles.recorder.events, expected) {
 		t.Fatalf("events = %v err = %v", doubles.recorder.events, err)
 	}
-	if installed != (InstalledAdvisorOutput{ServerPath: "C:/advisor/llama.cpp/llama-server.exe", ModelPath: "C:/advisor/models/model.gguf"}) {
+	if filepath.ToSlash(installed.ServerPath) != "C:/advisor/llama.cpp/llama-server.exe" || filepath.ToSlash(installed.ModelPath) != "C:/advisor/models/model.gguf" {
 		t.Fatalf("installed = %+v", installed)
 	}
 }
@@ -115,7 +118,7 @@ func TestSetupService_InstallAdvisor_CustomExecutable(t *testing.T) {
 
 	installed, err := newSetupDoubles().service().InstallAdvisor(context.Background(), input)
 
-	if err != nil || installed.ServerPath != "C:/advisor/llama.cpp/llama-server-cuda.exe" {
+	if err != nil || filepath.ToSlash(installed.ServerPath) != "C:/advisor/llama.cpp/llama-server-cuda.exe" {
 		t.Fatalf("installed = %+v err = %v", installed, err)
 	}
 }
@@ -156,6 +159,7 @@ func TestSetupService_InstallAdvisor_Validation(t *testing.T) {
 	}{
 		{name: "EmptyFolder_ReturnsErrFolderMissing", change: func(input *InstallAdvisorInput) { input.Folder = " " }, expectedError: discovery.ErrFolderMissing},
 		{name: "NoRuntime_ReturnsErrSetupArtifactMissing", change: func(input *InstallAdvisorInput) { input.Runtime = nil }, expectedError: ErrSetupArtifactMissing},
+		{name: "EmptyServerExecutable_ReturnsErrSetupArtifactMissing", change: func(input *InstallAdvisorInput) { input.ServerExecutableName = " " }, expectedError: ErrSetupArtifactMissing},
 		{name: "EmptyModelURL_ReturnsErrSetupArtifactMissing", change: func(input *InstallAdvisorInput) { input.Model.URL = "" }, expectedError: ErrSetupArtifactMissing},
 	}
 	for _, testCase := range cases {

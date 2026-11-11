@@ -11,58 +11,57 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/UrielJaloto/music-ops/internal/infrastructure/process"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/storage"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
 
-func TestFinishCommands_Golden(t *testing.T) {
-	commands := finishCommands(`C:\Local\music-ops\runs\r1\report.md`, `E:\Music`)
-
-	expected := []process.ProcessRequest{
-		{Executable: "powershell", Arguments: []string{"-NoProfile", "-Command", "[System.Media.SystemSounds]::Asterisk.Play()"}},
-		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `C:\Local\music-ops\runs\r1\report.md`}},
-		{Executable: "rundll32", Arguments: []string{"url.dll,FileProtocolHandler", `E:\Music`}},
-	}
-	if diff := differences(expected, commands); diff != "" {
-		t.Fatalf("commands (-want +got):\n%s", diff)
-	}
+type shellEffects struct {
+	soundErr error
+	openErr  error
+	opened   []string
+	sounds   int
 }
 
-type failingRunner struct {
-	failOn   string
-	requests []process.ProcessRequest
-}
-
-func (runner *failingRunner) Run(_ context.Context, request process.ProcessRequest) (process.ProcessResult, error) {
-	runner.requests = append(runner.requests, request)
-	if request.Executable == runner.failOn {
-		return process.ProcessResult{}, process.ProcessError{Executable: request.Executable, ExitCode: 1}
+func (effects *shellEffects) shell() DesktopShell {
+	shell := NewDesktopShell(storage.NewReportStorage("E:/Work"))
+	shell.open = func(path string) error {
+		effects.opened = append(effects.opened, path)
+		return effects.openErr
 	}
-	return process.ProcessResult{}, nil
+	shell.playSound = func() error {
+		effects.sounds++
+		return effects.soundErr
+	}
+	return shell
 }
 
 func TestDesktopShell_Finish(t *testing.T) {
+	errSound := errors.New("sound")
+	errOpen := errors.New("open")
 	cases := []struct {
-		name      string
-		failOn    string
-		isFailure bool
+		name          string
+		soundErr      error
+		openErr       error
+		expectedError error
 	}{
-		{name: "AllActionsSucceed"},
-		{name: "SoundFails_OthersStillRun", failOn: "powershell", isFailure: true},
+		{name: "AllEffectsSucceed"},
+		{name: "SoundUnsupported_Ignored", soundErr: ErrUnsupportedPlatform},
+		{name: "SoundFails_OpensStillRun", soundErr: errSound, expectedError: errSound},
+		{name: "OpenFails_Reported", openErr: errOpen, expectedError: errOpen},
+		{name: "OpenUnsupported_Reported", openErr: ErrUnsupportedPlatform, expectedError: ErrUnsupportedPlatform},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			runner := &failingRunner{failOn: testCase.failOn}
-			shell := NewDesktopShell(runner, storage.NewReportStorage("E:/Music"))
+			effects := &shellEffects{soundErr: testCase.soundErr, openErr: testCase.openErr}
 
-			err := shell.Finish(context.Background(), importing.ImportOutput{RunID: "r1", Output: "E:/Music"})
+			err := effects.shell().Finish(context.Background(), importing.ImportOutput{RunID: "r1", Output: "E:/Music"})
 
-			if (err != nil) != testCase.isFailure || len(runner.requests) != 3 {
-				t.Fatalf("err = %v requests = %d", err, len(runner.requests))
+			if testCase.expectedError == nil && err != nil || !errors.Is(err, testCase.expectedError) {
+				t.Fatalf("err = %v, want %v", err, testCase.expectedError)
 			}
-			if runner.requests[1].Arguments[1] != filepath.Join("E:/Music", "runs", "r1", "report.md") {
-				t.Fatalf("report path = %s", runner.requests[1].Arguments[1])
+			expectedOpened := []string{filepath.Join("E:/Work", "runs", "r1", "report.md"), "E:/Music"}
+			if diff := differences(expectedOpened, effects.opened); diff != "" || effects.sounds != 1 {
+				t.Fatalf("sounds = %d opened (-want +got):\n%s", effects.sounds, diff)
 			}
 		})
 	}

@@ -63,9 +63,9 @@ func (service MetadataService) Resolve(ctx context.Context, input ResolveMetadat
 		return ResolvedMetadata{}, fmt.Errorf("normalizing credits: %w", err)
 	}
 	genreTracks := toGenreTracks(input.Tracks, normalized.Credits)
-	classified, err := service.genres.Classify(ctx, classification.ClassifyGenresInput{Tracks: genreTracks})
+	classified, err := service.classify(ctx, genreTracks)
 	if err != nil {
-		return ResolvedMetadata{}, fmt.Errorf("classifying genres: %w", err)
+		return ResolvedMetadata{}, err
 	}
 	return ResolvedMetadata{
 		Tracks:   toResolvedTracks(genreTracks, classified.Classifications),
@@ -74,13 +74,21 @@ func (service MetadataService) Resolve(ctx context.Context, input ResolveMetadat
 	}, nil
 }
 
+func (service MetadataService) classify(ctx context.Context, genreTracks []classification.GenreTrack) (classification.ClassifiedGenres, error) {
+	classified, err := service.genres.Classify(ctx, classification.ClassifyGenresInput{Tracks: genreTracks})
+	if err != nil {
+		return classification.ClassifiedGenres{}, fmt.Errorf("classifying genres: %w", err)
+	}
+	return classified, nil
+}
+
 func toCreditTracks(tracks []MetadataTrack) []crediting.CreditTrack {
 	creditTracks := make([]crediting.CreditTrack, 0, len(tracks))
 	for _, track := range tracks {
 		tags := track.Source.Tags
 		creditTracks = append(creditTracks, crediting.CreditTrack{ID: track.ID, Source: credits.CreditSource{
 			Path: track.Source.Path, Title: tags.Title, Artist: tags.Artist, AlbumArtist: tags.AlbumArtist,
-		}})
+		}.FillTitleFromPath()})
 	}
 	return creditTracks
 }

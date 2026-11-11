@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
+	"github.com/UrielJaloto/music-ops/internal/infrastructure/process"
 	"github.com/UrielJaloto/music-ops/internal/services/publishing"
 )
 
@@ -15,16 +16,20 @@ var copyableCoverCodecs = []string{"png", "mjpeg"}
 var tagLineBreaks = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ")
 
 type FFmpegFinalizer struct {
-	runner     ProcessExecutor
-	executable string
+	runner ProcessExecutor
+	tools  ToolResolver
 }
 
-func NewFFmpegFinalizer(runner ProcessExecutor, executable string) FFmpegFinalizer {
-	return FFmpegFinalizer{runner: runner, executable: executable}
+func NewFFmpegFinalizer(runner ProcessExecutor, tools ToolResolver) FFmpegFinalizer {
+	return FFmpegFinalizer{runner: runner, tools: tools}
 }
 
 func (finalizer FFmpegFinalizer) Finalize(ctx context.Context, request publishing.FinalizeRequest) error {
-	return runToPartial(ctx, finalizer.runner, finalizer.executable, buildFinalizeArguments(request), request.Destination)
+	tools, err := finalizer.tools.ResolveTools(ctx)
+	if err != nil {
+		return err
+	}
+	return runToPartial(ctx, finalizer.runner, process.ProcessRequest{Executable: tools.FFmpeg, Arguments: buildFinalizeArguments(request)}, request.Destination)
 }
 
 func buildFinalizeArguments(request publishing.FinalizeRequest) []string {

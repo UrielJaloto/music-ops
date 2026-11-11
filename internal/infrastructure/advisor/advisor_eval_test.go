@@ -182,13 +182,14 @@ func libraryTracks(t *testing.T, library string) []string {
 func evalTagSource(t *testing.T, cache string) lastfm.TagSource {
 	t.Helper()
 	key, _ := os.LookupEnv("MUSIC_OPS_LASTFM_API_KEY")
-	store, err := storage.OpenBoltStore(filepath.Join(cache, "eval.db"))
+	store := storage.NewBoltStore(filepath.Join(cache, "eval.db"))
+	err := store.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	client := lastfm.NewLastFMClient(lastfm.LastFMSettings{APIKey: key, BaseURL: "https://ws.audioscrobbler.com/2.0/", Version: "eval"}, &http.Client{Timeout: 15 * time.Second}, lastfm.NewLastFMLimiter(), lastfm.NewExponentialBackoff(func() float64 { return 0.5 }, runtime.NewSystemClock()))
-	return lastfm.NewLastFMCache(client, storage.NewBoltCache(store, runtime.NewSystemClock()))
+	return lastfm.NewLastFMCache(client, storage.NewBoltCache(store, runtime.NewSystemClock(), lastfm.CacheBucket))
 }
 
 func normalizedGenre(tag string) string {

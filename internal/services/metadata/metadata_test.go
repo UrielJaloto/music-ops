@@ -97,6 +97,17 @@ func TestMetadataService_Resolve_ResolvesCreditsThenGenres(t *testing.T) {
 	}
 }
 
+func TestMetadataService_Resolve_UntaggedTrack_TitleFromFileName(t *testing.T) {
+	doubles := metadataFixture(t)
+	input := ResolveMetadataInput{Tracks: []MetadataTrack{{ID: "a", Source: tracks.SourceDetails{Path: "Band/Song - Band.m4a"}}}}
+
+	_, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+
+	if err != nil || doubles.credits.input.Tracks[0].Source != (credits.CreditSource{Path: "Band/Song - Band.m4a", Title: "Song", Artist: "Band"}) {
+		t.Fatalf("credit input = %+v err = %v", doubles.credits.input.Tracks, err)
+	}
+}
+
 func TestMetadataService_Resolve_CreditFailure_PropagatesAsFailedTrack(t *testing.T) {
 	doubles := metadataFixture(t)
 	credits, genres := doubles.credits, doubles.genres

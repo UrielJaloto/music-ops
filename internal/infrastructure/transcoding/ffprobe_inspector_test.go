@@ -88,7 +88,7 @@ func TestFFprobeInspector_Inspect(t *testing.T) {
 		t.Run(testCase.fixture, func(t *testing.T) {
 			runner := &ffprobeRunnerStub{output: ffprobeFixture(t, testCase.fixture)}
 
-			inspected, err := NewFFprobeInspector(runner, "ffprobe").Inspect(context.Background(), "song.flac")
+			inspected, err := NewFFprobeInspector(runner, fixedTools{FFprobe: "ffprobe"}).Inspect(context.Background(), "song.flac")
 
 			if diff := differences(testCase.expected, inspected); diff != "" || err != nil {
 				t.Fatalf("inspected (-want +got):\n%s err = %v", diff, err)
@@ -100,7 +100,7 @@ func TestFFprobeInspector_Inspect(t *testing.T) {
 func TestFFprobeInspector_Inspect_NFCTags(t *testing.T) {
 	runner := &ffprobeRunnerStub{output: []byte(`{"streams":[{"codec_type":"audio","codec_name":"flac","tags":{"title":"Benc\u0327a\u0303o"}}],"format":{}}`)}
 
-	inspected, err := NewFFprobeInspector(runner, "ffprobe").Inspect(context.Background(), "a.flac")
+	inspected, err := NewFFprobeInspector(runner, fixedTools{FFprobe: "ffprobe"}).Inspect(context.Background(), "a.flac")
 
 	if err != nil || inspected.Tags.Title != "Ben\u00e7\u00e3o" {
 		t.Fatalf("title = %q err = %v", inspected.Tags.Title, err)
@@ -119,7 +119,7 @@ func TestFFprobeInspector_Inspect_Errors(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := NewFFprobeInspector(testCase.runner, "ffprobe").Inspect(context.Background(), "a.flac")
+			_, err := NewFFprobeInspector(testCase.runner, fixedTools{FFprobe: "ffprobe"}).Inspect(context.Background(), "a.flac")
 
 			if !errors.Is(err, testCase.expectedError) {
 				t.Fatalf("err = %v", err)
@@ -129,7 +129,7 @@ func TestFFprobeInspector_Inspect_Errors(t *testing.T) {
 }
 
 func TestFFprobeInspector_Inspect_MalformedJSON(t *testing.T) {
-	_, err := NewFFprobeInspector(&ffprobeRunnerStub{output: []byte("{")}, "ffprobe").Inspect(context.Background(), "a.flac")
+	_, err := NewFFprobeInspector(&ffprobeRunnerStub{output: []byte("{")}, fixedTools{FFprobe: "ffprobe"}).Inspect(context.Background(), "a.flac")
 
 	if err == nil || !strings.Contains(err.Error(), "decoding ffprobe output") {
 		t.Fatalf("err = %v", err)
@@ -165,7 +165,7 @@ func TestFFprobeVerifier_Verify(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			verifier := NewFFprobeVerifier(NewFFprobeInspector(&ffprobeRunnerStub{output: testCase.probe}, "ffprobe"))
+			verifier := NewFFprobeVerifier(NewFFprobeInspector(&ffprobeRunnerStub{output: testCase.probe}, fixedTools{FFprobe: "ffprobe"}))
 
 			err := verifier.Verify(context.Background(), "out.m4a", testCase.expected)
 
@@ -191,7 +191,7 @@ func TestFFprobeVerifier_Verify_Errors(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := NewFFprobeVerifier(NewFFprobeInspector(testCase.runner, "ffprobe")).Verify(context.Background(), "a.m4a", publishing.PublishedAudio{})
+			err := NewFFprobeVerifier(NewFFprobeInspector(testCase.runner, fixedTools{FFprobe: "ffprobe"})).Verify(context.Background(), "a.m4a", publishing.PublishedAudio{})
 
 			if !errors.Is(err, testCase.expectedError) {
 				t.Fatalf("err = %v", err)

@@ -2,13 +2,11 @@ package library
 
 import (
 	"errors"
-	"strings"
+	"path/filepath"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 )
-
-const libraryPathSeparator = "/"
 
 type Library struct {
 	existing map[string]string
@@ -17,7 +15,7 @@ type Library struct {
 func NewLibrary(existingRelativePaths []string, root string) Library {
 	existing := make(map[string]string, len(existingRelativePaths))
 	for _, relative := range existingRelativePaths {
-		existing[filename.BuildDuplicateKey(relative)] = strings.TrimRight(root, "/\\") + libraryPathSeparator + relative
+		existing[filename.BuildDuplicateKey(relative)] = filepath.Join(root, relative)
 	}
 	return Library{existing: existing}
 }

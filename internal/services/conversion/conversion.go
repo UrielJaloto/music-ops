@@ -50,9 +50,14 @@ type ConvertTrack struct {
 	Quality audio.AudioQuality
 }
 
+type ConversionProgress interface {
+	Finished(path string, isFailed bool)
+}
+
 type ConvertInput struct {
-	Tracks  []ConvertTrack
-	Profile audio.EncodingProfile
+	Tracks   []ConvertTrack
+	Profile  audio.EncodingProfile
+	Progress ConversionProgress
 }
 
 type ConvertedTrack struct {
@@ -91,6 +96,7 @@ func (service ConversionService) Convert(ctx context.Context, input ConvertInput
 			return err
 		}
 		errorsByTrack[index] = service.convertTrack(ctx, input.Tracks[index], input.Profile)
+		input.Progress.Finished(input.Tracks[index].Source, errorsByTrack[index] != nil)
 		return nil
 	})
 	if err != nil {

@@ -73,7 +73,7 @@ func (downloader HTTPArtifactDownloader) fetch(ctx context.Context, artifact set
 	if response.StatusCode == http.StatusOK {
 		offset = 0
 	}
-	return downloader.store(response.Body, partial, offset, artifact.Name)
+	return downloader.store(response.Body, partialDownload{name: artifact.Name, path: partial, offset: offset})
 }
 
 func (downloader HTTPArtifactDownloader) buildRequest(ctx context.Context, address string, offset int64) (*http.Response, error) {
@@ -91,22 +91,29 @@ func (downloader HTTPArtifactDownloader) buildRequest(ctx context.Context, addre
 	return response, nil
 }
 
-func (downloader HTTPArtifactDownloader) store(body io.Reader, partial string, offset int64, name string) error {
+type partialDownload struct {
+	name   string
+	path   string
+	offset int64
+}
+
+func (downloader HTTPArtifactDownloader) store(body io.Reader, download partialDownload) error {
 	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
-	if offset > 0 {
+	if download.offset > 0 {
 		flags = os.O_CREATE | os.O_WRONLY | os.O_APPEND
 	}
-	file, err := os.OpenFile(filepath.Clean(partial), flags, stagingFilePermission)
+	file, err := os.OpenFile(filepath.Clean(download.path), flags, stagingFilePermission)
 	if err != nil {
-		return fmt.Errorf("opening %s: %w", partial, err)
+		return fmt.Errorf("opening %s: %w", download.path, err)
 	}
-	copyErr := downloader.copyWithProgress(file, body, offset, name)
+	copyErr := downloader.copyWithProgress(file, body, download)
 	return errors.Join(copyErr, file.Close())
 }
 
-func (downloader HTTPArtifactDownloader) copyWithProgress(file io.Writer, body io.Reader, offset int64, name string) error {
+func (downloader HTTPArtifactDownloader) copyWithProgress(file io.Writer, body io.Reader, download partialDownload) error {
+	name := download.name
 	buffer := make([]byte, downloadChunkBytes)
-	done := offset
+	done := download.offset
 	for {
 		read, readErr := body.Read(buffer)
 		if _, err := file.Write(buffer[:read]); err != nil {

@@ -32,7 +32,7 @@ func TestFFmpegAACEncoder_Integration_FLACAt512k(t *testing.T) {
 	destination := filepath.Join(folder, "out.audio.m4a")
 	quality := inspectedQuality(t, source)
 
-	err := NewFFmpegAACEncoder(process.NewProcessRunner(), ffmpeg, capabilities).Encode(context.Background(), conversion.EncodeRequest{Source: source, Destination: destination, Profile: audio.NewEncodingProfile(audio.EngineNative), Quality: quality})
+	err := NewFFmpegAACEncoder(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg, Capabilities: capabilities}).Encode(context.Background(), conversion.EncodeRequest{Source: source, Destination: destination, Profile: audio.NewEncodingProfile(audio.EngineNative), Quality: quality})
 
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestFFmpegAACEncoder_Integration_CorruptSource(t *testing.T) {
 	destination := filepath.Join(folder, "out.audio.m4a")
 	quality, _ := audio.NewAudioQuality(audio.AudioQualityDetails{SampleRate: 44100, Channels: 2, Duration: 2 * time.Second})
 
-	err := NewFFmpegAACEncoder(process.NewProcessRunner(), ffmpeg, capabilities).Encode(context.Background(), conversion.EncodeRequest{Source: source, Destination: destination, Profile: audio.NewEncodingProfile(audio.EngineNative), Quality: quality})
+	err := NewFFmpegAACEncoder(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg, Capabilities: capabilities}).Encode(context.Background(), conversion.EncodeRequest{Source: source, Destination: destination, Profile: audio.NewEncodingProfile(audio.EngineNative), Quality: quality})
 
 	var processError process.ProcessError
 	if !errors.As(err, &processError) {
@@ -62,7 +62,7 @@ func TestFFmpegAudioCopier_Integration_KeepsCodecAndBitrate(t *testing.T) {
 	source := buildAudioFixtures(t, folder, []audioFixture{{relativePath: "a.m4a", format: "m4a", tags: audioFixtureTags{title: "Old"}, signal: audioFixtureSignal{sampleRate: 44100, channels: 2, seconds: 3}}})[0]
 	destination := filepath.Join(folder, "out.audio.m4a")
 
-	err := NewFFmpegAudioCopier(process.NewProcessRunner(), ffmpeg).CopyAudio(context.Background(), source, destination)
+	err := NewFFmpegAudioCopier(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg}).CopyAudio(context.Background(), source, destination)
 
 	sourceStream := firstAudioStream(t, probeFixture(t, source))
 	copied := probeFixture(t, destination)
@@ -77,8 +77,8 @@ func TestFFmpegAudioCopier_Integration_KeepsCodecAndBitrate(t *testing.T) {
 func TestAACEncoderSelector_Integration(t *testing.T) {
 	requireFDKLibrary(t)
 	ffmpeg, capabilities := detectTestCapabilities(t)
-	native := NewFFmpegAACEncoder(process.NewProcessRunner(), ffmpeg, capabilities)
-	decoder := NewFFmpegDecoder(process.NewProcessRunner(), ffmpeg, capabilities)
+	native := NewFFmpegAACEncoder(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg, Capabilities: capabilities})
+	decoder := NewFFmpegDecoder(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg, Capabilities: capabilities})
 	cases := []struct {
 		name        string
 		library     string
@@ -86,6 +86,9 @@ func TestAACEncoderSelector_Integration(t *testing.T) {
 		assertAudio func(t *testing.T, path string, channels int, duration time.Duration)
 	}{
 		{name: "InvalidLibraryPath_Native", library: filepath.Join(t.TempDir(), "FDK-AAC.dll"), expected: audio.NewEncodingProfile(audio.EngineNative), assertAudio: assertNativeAudio},
+		{name: "EmptyLibraryPath_DiscoveredFDK", library: "", expected: audio.NewEncodingProfile(audio.EngineFDK), assertAudio: func(t *testing.T, path string, channels int, duration time.Duration) {
+			assertPublishableAudio(t, path, 256000, channels, duration)
+		}},
 		{name: "ValidLibraryPath_FDK", library: fdkLibraryPath(), expected: audio.NewEncodingProfile(audio.EngineFDK), assertAudio: func(t *testing.T, path string, channels int, duration time.Duration) {
 			assertPublishableAudio(t, path, 256000, channels, duration)
 		}},

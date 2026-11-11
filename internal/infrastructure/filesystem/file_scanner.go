@@ -33,13 +33,14 @@ func (scanner FileScanner) FindAudioFiles(ctx context.Context, folder string) (d
 	if err := requireFolder(folder); err != nil {
 		return discovery.FoundFiles{}, err
 	}
-	found := discovery.FoundFiles{Audio: []discovery.FoundFile{}, Ignored: []string{}}
+	collector := &fileCollector{root: folder, found: discovery.FoundFiles{Audio: []discovery.FoundFile{}, Ignored: []string{}}}
 	err := filepath.WalkDir(folder, func(path string, entry fs.DirEntry, err error) error {
 		if err := errors.Join(err, ctx.Err()); err != nil {
 			return err
 		}
-		return collectEntry(&found, folder, path, entry)
+		return collector.collect(path, entry)
 	})
+	found := collector.found
 	if err != nil {
 		return discovery.FoundFiles{}, fmt.Errorf("scanning %s: %w", folder, err)
 	}
@@ -61,7 +62,13 @@ func requireFolder(folder string) error {
 	return nil
 }
 
-func collectEntry(found *discovery.FoundFiles, root, path string, entry fs.DirEntry) error {
+type fileCollector struct {
+	root  string
+	found discovery.FoundFiles
+}
+
+func (collector *fileCollector) collect(path string, entry fs.DirEntry) error {
+	found, root := &collector.found, collector.root
 	if entry.IsDir() {
 		return skipDirectory(root, path, entry)
 	}
@@ -111,4 +118,36 @@ func isAudioFile(name string) bool {
 func toRelativeSlashPath(root, path string) string {
 	relative := strings.TrimPrefix(strings.TrimPrefix(path, root), string(filepath.Separator))
 	return norm.NFC.String(filepath.ToSlash(relative))
+}
+
+func (scanner FileScanner) IsInside(parent, child string) (bool, error) {
+	parentInfo, err := os.Stat(parent)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("reading %s: %w", parent, err)
+	}
+	folder, err := filepath.Abs(child)
+	if err != nil {
+		return false, fmt.Errorf("resolving %s: %w", child, err)
+	}
+	return isFolderOrAncestor(parentInfo, folder)
+}
+
+func isFolderOrAncestor(target fs.FileInfo, folder string) (bool, error) {
+	for {
+		info, err := os.Stat(folder)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return false, fmt.Errorf("reading %s: %w", folder, err)
+		}
+		if err == nil && os.SameFile(target, info) {
+			return true, nil
+		}
+		parent := filepath.Dir(folder)
+		if parent == folder {
+			return false, nil
+		}
+		folder = parent
+	}
 }

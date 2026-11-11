@@ -2,6 +2,7 @@ package credits
 
 import (
 	"errors"
+	"path/filepath"
 	"slices"
 	"testing"
 )
@@ -198,6 +199,43 @@ func TestAddGuests(t *testing.T) {
 	}
 }
 
+func TestCreditSource_FillTitleFromPath(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   CreditSource
+		expected CreditSource
+	}{
+		{"TitleTagKept", CreditSource{Path: "C:/Music/Queen - Song.flac", Title: "Tagged"}, CreditSource{Path: "C:/Music/Queen - Song.flac", Title: "Tagged"}},
+		{"WhitespaceTitle_UsesFileName", CreditSource{Path: "C:/Music/Song.flac", Title: "  "}, CreditSource{Path: "C:/Music/Song.flac", Title: "Song"}},
+		{"NoSeparator_StemIsTitle", CreditSource{Path: "C:/Music/Song (Live).m4a"}, CreditSource{Path: "C:/Music/Song (Live).m4a", Title: "Song (Live)"}},
+		{"ArtistDashTitle", CreditSource{Path: "C:/Music/Downloads/Queen - Song.flac"}, CreditSource{Path: "C:/Music/Downloads/Queen - Song.flac", Title: "Song"}},
+		{"TitleDashFolderArtist", CreditSource{Path: "C:/Music/LinkinPark/Numb (Official Video) - Linkin Park.m4a"}, CreditSource{Path: "C:/Music/LinkinPark/Numb (Official Video) - Linkin Park.m4a", Title: "Numb (Official Video)", Artist: "Linkin Park"}},
+		{"TitleDashFolderArtistWithSuffix", CreditSource{Path: "C:/Music/LinkinPark/FRGT (Official HD Video) - Linkin Park (Reanimation).m4a"}, CreditSource{Path: "C:/Music/LinkinPark/FRGT (Official HD Video) - Linkin Park (Reanimation).m4a", Title: "FRGT (Official HD Video) (Reanimation)", Artist: "Linkin Park"}},
+		{"FolderNamePrefixOfWord_NotArtist", CreditSource{Path: "C:/Music/Queen/Queens - Song.m4a"}, CreditSource{Path: "C:/Music/Queen/Queens - Song.m4a", Title: "Song"}},
+		{"FolderNameLongerThanPart_NotArtist", CreditSource{Path: "C:/Music/Queen II/Song - Queen.m4a"}, CreditSource{Path: "C:/Music/Queen II/Song - Queen.m4a", Title: "Queen"}},
+		{"NoFolder_ArtistDashTitle", CreditSource{Path: "Queen - Song.m4a"}, CreditSource{Path: "Queen - Song.m4a", Title: "Song"}},
+		{"TitleDashFolderArtist_ArtistTagKept", CreditSource{Path: "C:/Music/Queen/Song - QUEEN.m4a", Artist: "Freddie"}, CreditSource{Path: "C:/Music/Queen/Song - QUEEN.m4a", Title: "Song", Artist: "Freddie"}},
+		{"TitleDashFolderArtist_AlbumArtistUsed", CreditSource{Path: "C:/Music/Queen/Song - Queen.m4a", AlbumArtist: "Band"}, CreditSource{Path: "C:/Music/Queen/Song - Queen.m4a", Title: "Song", AlbumArtist: "Band"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.source.FillTitleFromPath(); got != testCase.expected {
+				t.Fatalf("got %#v, want %#v", got, testCase.expected)
+			}
+		})
+	}
+}
+
+func TestCreditSource_BuildCreditFromRules_UntaggedFolderArtistFile(t *testing.T) {
+	source := CreditSource{Path: "C:/Music/LinkinPark/Krwlng [feat. Aaron Lewis] - Linkin Park.m4a"}.FillTitleFromPath()
+
+	credit, err := source.BuildCreditFromRules()
+
+	if err != nil || credit.Title().String() != "Krwlng" || credit.Artists().String() != "Linkin Park; Aaron Lewis" {
+		t.Fatalf("credit = %q / %q err = %v", credit.Title().String(), credit.Artists().String(), err)
+	}
+}
+
 func TestCreditSource_BuildCreditFromRules(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -215,7 +253,7 @@ func TestCreditSource_BuildCreditFromRules(t *testing.T) {
 		{"Spec_IronMan", CreditSource{Title: "Iron Man (2009 Remaster)", Artist: "Black Sabbath"}, "Iron Man (2009 Remaster)", "Black Sabbath", nil},
 		{"CR3_GuestAlreadyCredited", CreditSource{Title: "Song (feat. B)", Artist: "A; B"}, "Song", "A; B", nil},
 		{"CR5_AlbumArtistWhenArtistEmpty", CreditSource{Title: "Song", AlbumArtist: "Band"}, "Song", "Band", nil},
-		{"CR5_ArtistFromFolder", CreditSource{Path: "C:\\Music\\Queen - Greatest Hits\\01 Song.flac", Title: "Song"}, "Song", "Queen", nil},
+		{"CR5_ArtistFromFolder", CreditSource{Path: filepath.Join("Music", "Queen - Greatest Hits", "01 Song.flac"), Title: "Song"}, "Song", "Queen", nil},
 		{"CR5_ArtistFromFileName", CreditSource{Path: "C:/Music/Downloads/Queen - Song.flac", Title: "Song"}, "Song", "Queen", nil},
 		{"CR5_NoArtistAnywhere_ReturnsErrArtistMissing", CreditSource{Path: "C:/Music/song.flac", Title: "Song"}, "", "", ErrArtistMissing},
 		{"CR5_EmptyPath_ReturnsErrArtistMissing", CreditSource{Title: "Song"}, "", "", ErrArtistMissing},

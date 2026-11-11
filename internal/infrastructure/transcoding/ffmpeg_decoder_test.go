@@ -135,7 +135,7 @@ func TestFFmpegDecoder_ArgumentsGolden(t *testing.T) {
 			runner := &scriptedRunner{}
 			request := DecodeRequest{Source: "in.flac", Profile: audio.NewEncodingProfile(audio.EngineFDK), Quality: qualityOf(t, testCase.quality[0], testCase.quality[1], testCase.quality[2])}
 
-			err := NewFFmpegDecoder(runner, "ffmpeg", testCase.capabilities).Stream(context.Background(), request, &strings.Builder{})
+			err := NewFFmpegDecoder(runner, fixedTools{FFmpeg: "ffmpeg", Capabilities: testCase.capabilities}).Stream(context.Background(), request, &strings.Builder{})
 
 			expected := append(append(append([]string{}, head...), testCase.expectedTail...), "-f", "s16le", "-")
 			if diff := differences(expected, runner.requests[0].Arguments); diff != "" || err != nil {

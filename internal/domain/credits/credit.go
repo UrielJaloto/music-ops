@@ -1,24 +1,23 @@
 package credits
 
 import (
+	"errors"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
+	"unicode"
 )
 
 var (
-	ErrTitleMissing  = businesserr.NewBusinessError("title is missing")
-	ErrArtistMissing = businesserr.NewBusinessError("artist is missing")
+	ErrTitleMissing  = errors.New("title is missing")
+	ErrArtistMissing = errors.New("artist is missing")
 )
 
 const (
-	artistTagSeparator   = ";"
-	artistJoinSeparator  = "; "
-	pathArtistSeparator  = " - "
-	windowsPathSeparator = "\\"
-	slashPathSeparator   = "/"
+	artistTagSeparator  = ";"
+	artistJoinSeparator = "; "
+	pathArtistSeparator = " - "
 )
 
 var (
@@ -139,6 +138,54 @@ type CreditSource struct {
 	AlbumArtist string
 }
 
+func (source CreditSource) FillTitleFromPath() CreditSource {
+	if CollapseWhitespace(source.Title) != "" {
+		return source
+	}
+	stem := strings.TrimSuffix(filepath.Base(source.Path), filepath.Ext(source.Path))
+	left, right, found := strings.Cut(stem, pathArtistSeparator)
+	artist, suffix, isFolderArtist := cutFolderName(right, filepath.Base(filepath.Dir(source.Path)))
+	switch {
+	case !found:
+		source.Title = stem
+	case isFolderArtist:
+		source.Title = CollapseWhitespace(left + " " + suffix)
+		source.Artist = source.resolveArtist(artist)
+	default:
+		source.Title = right
+	}
+	return source
+}
+
+func cutFolderName(value, folder string) (string, string, bool) {
+	expected := []rune(strings.ToLower(strings.Join(strings.Fields(folder), "")))
+	matched := 0
+	for index, character := range value {
+		if matched == len(expected) {
+			return strings.TrimSpace(value[:index]), strings.TrimSpace(value[index:]), isSuffixSeparated(value[index:])
+		}
+		if !unicode.IsSpace(character) && unicode.ToLower(character) != expected[matched] {
+			return "", "", false
+		}
+		if !unicode.IsSpace(character) {
+			matched++
+		}
+	}
+	return strings.TrimSpace(value), "", len(expected) > 0 && matched == len(expected)
+}
+
+func isSuffixSeparated(rest string) bool {
+	trimmed := strings.TrimLeft(rest, " ")
+	return strings.HasPrefix(trimmed, "(") || strings.HasPrefix(trimmed, "[")
+}
+
+func (source CreditSource) resolveArtist(fallback string) string {
+	if CollapseWhitespace(source.Artist+source.AlbumArtist) == "" {
+		return fallback
+	}
+	return source.Artist
+}
+
 type Credit struct {
 	title   Title
 	artists ArtistCredit
@@ -191,21 +238,13 @@ func (source CreditSource) resolveMainArtists() (ArtistCredit, error) {
 }
 
 func extractArtistFromPath(path string) string {
-	segments := strings.Split(strings.ReplaceAll(path, windowsPathSeparator, slashPathSeparator), slashPathSeparator)
-	for _, segment := range []string{parentSegment(segments), segments[len(segments)-1]} {
+	for _, segment := range []string{filepath.Base(filepath.Dir(path)), filepath.Base(path)} {
 		artist, _, found := strings.Cut(segment, pathArtistSeparator)
 		if found {
 			return artist
 		}
 	}
 	return ""
-}
-
-func parentSegment(segments []string) string {
-	if len(segments) < 2 {
-		return ""
-	}
-	return segments[len(segments)-2]
 }
 
 func (source CreditSource) containsArtists(artists []string) bool {

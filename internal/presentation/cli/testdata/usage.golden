@@ -17,4 +17,4 @@ flags (every command except config):
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable
   --verbose                    print detailed logs to the console
-  --no-open                    do not open the report and the output folder
+  --open                       open the report and the output folder when done

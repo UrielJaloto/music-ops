@@ -3,14 +3,12 @@ package cli
 import (
 	"cmp"
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
@@ -22,11 +20,6 @@ const (
 	reportJSONIndent = "  "
 	failedStatus     = "failed"
 )
-
-//go:embed report.md.tmpl
-var reportTemplateText string
-
-var reportTemplate = template.Must(template.New(reportMarkdown).Parse(reportTemplateText))
 
 var statusIcons = map[string]string{
 	"published":         "✅",
@@ -98,7 +91,7 @@ func (presenter ReportPresenter) Present(ctx context.Context, output importing.I
 	}
 	escaped := escapeReport(response)
 	if err := presenter.writeFile(ctx, output.RunID, reportMarkdown, func(writer io.Writer) error {
-		return reportTemplate.Execute(writer, escaped)
+		return writeReportMarkdown(writer, escaped)
 	}); err != nil {
 		return "", err
 	}

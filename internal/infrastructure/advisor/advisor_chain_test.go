@@ -214,7 +214,7 @@ func TestAdvisorCache_Failures(t *testing.T) {
 	key := cachedTask[classification.GenreRequest, classification.GenreSuggestion]{scope: "genre" + PromptFingerprint() + "x", identity: func(request classification.GenreRequest) any {
 		return genreIdentity{Path: request.Path, Title: request.Title, Artists: request.Artists, Tags: request.Tags}
 	}}.buildCacheKey(classification.GenreRequest{Key: "g"})
-	corrupt.values[advisorCacheBucket+"/"+key] = []byte("{")
+	corrupt.values[key] = []byte("{")
 	_, decodeErr := NewGenreAdvisorCache(inner, corrupt, "x").SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g"}})
 
 	if !errors.Is(storeErr, errStore) || !errors.Is(innerErr, ErrAdvisorUnavailable) || decodeErr == nil {
@@ -240,14 +240,14 @@ func newMemoryByteCache() *memoryByteCache {
 	return &memoryByteCache{values: map[string][]byte{}, ttls: map[string]time.Duration{}}
 }
 
-func (cache *memoryByteCache) Get(_ context.Context, bucket, key string) ([]byte, bool, error) {
-	value, isFound := cache.values[bucket+"/"+key]
+func (cache *memoryByteCache) Get(_ context.Context, key string) ([]byte, bool, error) {
+	value, isFound := cache.values[key]
 	return value, isFound, cache.err
 }
 
-func (cache *memoryByteCache) Put(_ context.Context, bucket, key string, value []byte, ttl time.Duration) error {
-	cache.values[bucket+"/"+key] = value
-	cache.ttls[bucket+"/"+key] = ttl
+func (cache *memoryByteCache) Put(_ context.Context, key string, value []byte, ttl time.Duration) error {
+	cache.values[key] = value
+	cache.ttls[key] = ttl
 	return cache.putErr
 }
 
@@ -255,9 +255,8 @@ const fixtureCacheFolder = "music-ops-test-cache"
 
 func requireFFmpeg(t *testing.T) (string, string) {
 	t.Helper()
-	localAppData, _ := os.LookupEnv("LOCALAPPDATA")
-	ffmpeg, ffmpegErr := transcoding.LocateFFmpeg("", exec.LookPath, localAppData)
-	ffprobe, ffprobeErr := transcoding.LocateFFprobe("", exec.LookPath, localAppData)
+	ffmpeg, ffmpegErr := transcoding.LocateFFmpeg("", exec.LookPath)
+	ffprobe, ffprobeErr := transcoding.LocateFFprobe("", exec.LookPath)
 	if ffmpegErr == nil && ffprobeErr == nil {
 		return ffmpeg, ffprobe
 	}

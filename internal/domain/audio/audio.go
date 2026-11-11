@@ -1,19 +1,18 @@
 package audio
 
 import (
+	"errors"
 	"strings"
 	"time"
-
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
 )
 
 var (
-	ErrCodecMissing         = businesserr.NewBusinessError("audio codec is missing")
-	ErrSampleRateOutOfRange = businesserr.NewBusinessError("sample rate out of range")
-	ErrChannelsOutOfRange   = businesserr.NewBusinessError("channel count out of range")
-	ErrDurationMissing      = businesserr.NewBusinessError("audio duration is missing")
-	ErrBitDepthOutOfRange   = businesserr.NewBusinessError("bit depth out of range")
-	ErrBitRateNegative      = businesserr.NewBusinessError("bit rate is negative")
+	ErrCodecMissing         = errors.New("audio codec is missing")
+	ErrSampleRateOutOfRange = errors.New("sample rate out of range")
+	ErrChannelsOutOfRange   = errors.New("channel count out of range")
+	ErrDurationMissing      = errors.New("audio duration is missing")
+	ErrBitDepthOutOfRange   = errors.New("bit depth out of range")
+	ErrBitRateNegative      = errors.New("bit rate is negative")
 )
 
 const (

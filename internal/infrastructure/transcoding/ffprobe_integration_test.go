@@ -22,7 +22,7 @@ func TestFFprobeInspector_Integration(t *testing.T) {
 		{relativePath: "c.opus", format: "opus", tags: tags, signal: audioFixtureSignal{sampleRate: 48000, channels: 1, seconds: 2}},
 	}
 	paths := buildAudioFixtures(t, t.TempDir(), fixtures)
-	inspector := NewFFprobeInspector(process.NewProcessRunner(), ffprobe)
+	inspector := NewFFprobeInspector(process.NewProcessRunner(), fixedTools{FFprobe: ffprobe})
 	expectedTags := tracks.SourceTags{Title: tags.title, Artist: "Main", AlbumArtist: "Main", Album: "Album", Date: "2024", Position: tracks.SourcePosition{TrackNumber: 5, TrackTotal: 50, DiscNumber: 1}}
 
 	for index, path := range paths {
@@ -45,7 +45,7 @@ func TestFFprobeVerifier_Integration(t *testing.T) {
 	_, ffprobe := requireFFmpeg(t)
 	tags := audioFixtureTags{title: "Song", artist: "Artist", track: 1, trackTotal: 2}
 	paths := buildAudioFixtures(t, t.TempDir(), []audioFixture{{relativePath: "a.m4a", format: "m4a", tags: tags, signal: audioFixtureSignal{sampleRate: 44100, channels: 2, seconds: 3}}})
-	verifier := NewFFprobeVerifier(NewFFprobeInspector(process.NewProcessRunner(), ffprobe))
+	verifier := NewFFprobeVerifier(NewFFprobeInspector(process.NewProcessRunner(), fixedTools{FFprobe: ffprobe}))
 	metadata := tracks.TrackMetadata{Title: "Song", Artist: "Artist", Track: "1/2"}
 
 	matchErr := verifier.Verify(context.Background(), paths[0], publishing.PublishedAudio{Metadata: metadata, Duration: 3 * time.Second})

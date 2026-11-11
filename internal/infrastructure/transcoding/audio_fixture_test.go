@@ -76,9 +76,8 @@ func flacSampleFormat(bitDepth int) []string {
 
 func requireFFmpeg(t *testing.T) (string, string) {
 	t.Helper()
-	localAppData, _ := os.LookupEnv("LOCALAPPDATA")
-	ffmpeg, ffmpegErr := LocateFFmpeg("", exec.LookPath, localAppData)
-	ffprobe, ffprobeErr := LocateFFprobe("", exec.LookPath, localAppData)
+	ffmpeg, ffmpegErr := LocateFFmpeg("", exec.LookPath)
+	ffprobe, ffprobeErr := LocateFFprobe("", exec.LookPath)
 	if ffmpegErr == nil && ffprobeErr == nil {
 		return ffmpeg, ffprobe
 	}

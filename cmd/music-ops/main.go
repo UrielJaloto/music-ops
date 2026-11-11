@@ -1,24 +1,19 @@
 package main
 
-//go:generate go run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.5.0 -64 -o resource_windows_amd64.syso -ver-major=$MUSIC_OPS_VERSION_MAJOR -ver-minor=$MUSIC_OPS_VERSION_MINOR -ver-patch=$MUSIC_OPS_VERSION_PATCH -product-ver-major=$MUSIC_OPS_VERSION_MAJOR -product-ver-minor=$MUSIC_OPS_VERSION_MINOR -product-ver-patch=$MUSIC_OPS_VERSION_PATCH -file-version=$MUSIC_OPS_VERSION -product-version=$MUSIC_OPS_VERSION ../../build/versioninfo.json
-
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/advisor"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/artifacts"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/config"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/desktop"
-	"github.com/UrielJaloto/music-ops/internal/infrastructure/faultinjection"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/filesystem"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/lastfm"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/logging"
@@ -35,12 +30,18 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 	"github.com/UrielJaloto/music-ops/internal/services/metadata"
 	"github.com/UrielJaloto/music-ops/internal/services/publishing"
+	"github.com/UrielJaloto/music-ops/internal/services/session"
 	"github.com/UrielJaloto/music-ops/internal/services/settings"
 	"github.com/UrielJaloto/music-ops/internal/services/setup"
 	"github.com/UrielJaloto/music-ops/internal/services/watching"
 )
 
 var version = "dev"
+
+const (
+	advisorFolder = "advisor"
+	stateFileName = "state.db"
+)
 
 func main() {
 	os.Exit(run(os.Args[1:], terminal{input: os.Stdin, output: os.Stdout, errors: os.Stderr}, os.LookupEnv))
@@ -58,367 +59,184 @@ func run(arguments []string, console terminal, environment func(string) (string,
 	if err != nil {
 		return errorPresenter.Present(err)
 	}
-	interrupted, stop := runtime.NewInterruptContext(context.Background(), os.Exit)
+	ctx, stop := runtime.NewInterruptContext(context.Background(), os.Exit)
 	defer stop()
-	ctx, cancel := faultinjection.WithCancellation(interrupted, environment)
-	defer cancel()
-	paths := config.ReadEnvironmentPaths(environment)
-	store := config.NewConfigStore(config.DefaultConfigPath(paths.AppData), environment)
+	locations := config.FindUserLocations()
+	store := config.NewConfigStore(locations, environment)
 	loaded, err := store.Load(ctx, request.Overrides)
 	if err != nil {
 		return errorPresenter.Present(err)
 	}
-	application := newWiring(wiringSettings{config: loaded, paths: paths, request: request, console: console, environment: environment, store: store})
-	code := application.router().Route(ctx, request)
-	application.close(context.WithoutCancel(ctx))
+	app := application{
+		config: loaded, locations: locations, request: request, console: console, store: store,
+		errors: errorPresenter, clock: runtime.NewSystemClock(), runner: process.NewProcessRunner(),
+	}
+	code := app.buildRouter().Route(ctx, request)
 	desktop.NewConsoleSession(console.input, console.output).WaitForExit()
 	return code
 }
 
-const (
-	applicationFolder   = "music-ops"
-	advisorFolder       = "advisor"
-	stateFileName       = "state.db"
-	logFileName         = "log.jsonl"
-	shortHTTPTimeout    = 30 * time.Second
-	advisorHTTPTimeout  = 10 * time.Minute
-	healthHTTPTimeout   = 2 * time.Second
-	advisorLoadTimeout  = 60 * time.Second
-	bitsPerKilobit      = 1000
-	versionEngineFormat = "%s %d kb/s"
-)
-
-var errWorkFolderUnknown = errors.New("LOCALAPPDATA is not set: cannot locate the work folder")
-
-type wiringSettings struct {
-	config      config.Config
-	paths       config.EnvironmentPaths
-	request     cli.RouterRequest
-	console     terminal
-	environment func(string) (string, bool)
-	store       config.ConfigStore
+type application struct {
+	config    config.Config
+	locations config.Locations
+	request   cli.RouterRequest
+	console   terminal
+	store     config.ConfigStore
+	errors    cli.ErrorPresenter
+	clock     runtime.SystemClock
+	runner    process.ProcessRunner
 }
 
-type wiring struct {
-	settings wiringSettings
-	clock    runtime.SystemClock
-	runner   process.ProcessRunner
-	errors   cli.ErrorPresenter
-	closers  []func(ctx context.Context) error
+type encoding struct {
+	tools    transcoding.Toolchain
+	fdk      transcoding.FDKAACEncoder
+	selector transcoding.AACEncoderSelector
 }
 
-func newWiring(settings wiringSettings) *wiring {
-	return &wiring{
-		settings: settings,
-		clock:    runtime.NewSystemClock(),
-		runner:   process.NewProcessRunner(),
-		errors:   cli.NewErrorPresenter(settings.console.errors),
-	}
-}
-
-func (application *wiring) router() cli.CommandRouter {
-	controllers := map[string]cli.CommandController{
-		cli.CommandRun:     application.deferred(application.runCommand),
-		cli.CommandPreview: application.deferred(application.previewCommand),
-		cli.CommandWatch:   application.deferred(application.watchCommand),
-		cli.CommandStatus:  application.statusCommand(),
-		cli.CommandVersion: application.deferred(application.versionCommand),
-		cli.CommandConfig:  application.configCommand(),
-		cli.CommandAdvisor: application.advisorCommand(),
-	}
-	return cli.NewCommandRouter(controllers, application.settings.console.output)
-}
-
-func (application *wiring) close(ctx context.Context) {
-	for index := len(application.closers) - 1; index >= 0; index-- {
-		if err := application.closers[index](ctx); err != nil {
-			application.errors.Present(err)
-		}
-	}
-}
-
-func (application *wiring) onClose(closer func(ctx context.Context) error) {
-	application.closers = append(application.closers, closer)
-}
-
-type deferredCommand struct {
-	build  func(ctx context.Context) (cli.CommandController, error)
-	errors cli.ErrorPresenter
-}
-
-func (application *wiring) deferred(build func(ctx context.Context) (cli.CommandController, error)) deferredCommand {
-	return deferredCommand{build: build, errors: application.errors}
-}
-
-func (command deferredCommand) Execute(ctx context.Context, arguments []string) int {
-	controller, err := command.build(ctx)
-	if err != nil {
-		return command.errors.Present(err)
-	}
-	return controller.Execute(ctx, arguments)
-}
-
-func (application *wiring) runCommand(ctx context.Context) (cli.CommandController, error) {
-	controller, err := application.newImportController(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return cli.NewRunCommand(controller), nil
-}
-
-func (application *wiring) previewCommand(ctx context.Context) (cli.CommandController, error) {
-	controller, err := application.newImportController(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return cli.NewPreviewCommand(controller), nil
-}
-
-func (application *wiring) configCommand() cli.CommandController {
-	console := application.settings.console
-	presenter := cli.NewSettingsPresenter(console.output, application.errors)
-	return cli.NewSettingsController(settings.NewSettingsService(application.settings.store), presenter)
-}
-
-func (application *wiring) advisorCommand() cli.CommandController {
-	presenter := cli.NewSetupPresenter(application.settings.console.output, application.errors)
-	downloader := artifacts.NewHTTPArtifactDownloader(&http.Client{}, presenter)
-	setup := setup.NewSetupService(downloader, artifacts.NewZipExtractor(), application.settings.store, presenter)
-	artifacts := cli.AdvisorArtifacts{
-		Folder:  filepath.Join(application.settings.paths.LocalAppData, applicationFolder, advisorFolder),
-		Runtime: artifacts.BuildAdvisorRuntimeArtifacts(), Model: artifacts.BuildAdvisorModelArtifact(),
-		ServerExecutableName: artifacts.AdvisorServerExecutable,
-	}
-	return cli.NewSetupController(setup, presenter, artifacts)
-}
-
-func (application *wiring) statusCommand() cli.CommandController {
-	configured := application.settings.config
-	ffmpeg := transcoding.FFmpegForDiagnostics(configured.Encoder.FFmpeg, exec.LookPath, application.settings.paths.LocalAppData)
-	detector := transcoding.NewFFmpegCapabilityDetector(application.runner, ffmpeg)
-	encoderProbe := transcoding.NewEncoderProbe(detector, transcoding.NewFDKAACEncoder(nil, configured.Encoder.FDKLibrary))
-	diagnostics := diagnostics.NewDiagnosticsService(encoderProbe, application.newLastFMClient(), application.newAdvisorChain(), filesystem.NewOutputProbe(configured.Output.Dir))
-	return cli.NewDiagnosticsController(diagnostics, cli.NewDiagnosticsPresenter(application.settings.console.output))
-}
-
-func (application *wiring) versionCommand(ctx context.Context) (cli.CommandController, error) {
-	encoding, err := application.newEncoding(ctx)
-	if err != nil {
-		return nil, err
-	}
-	reporter := versionReporter{version: version, capabilities: encoding.capabilities, selector: encoding.selector}
-	return cli.NewVersionController(reporter, application.settings.console.output), nil
-}
-
-type versionReporter struct {
-	version      string
-	capabilities transcoding.FFmpegCapabilities
-	selector     transcoding.AACEncoderSelector
-}
-
-func (reporter versionReporter) Report(context.Context) cli.VersionReport {
-	engine := fmt.Sprintf(versionEngineFormat, reporter.selector.EngineName(), reporter.selector.SelectProfile().Bitrate()/bitsPerKilobit)
-	return cli.VersionReport{Version: reporter.version, FFmpegVersion: reporter.capabilities.Version, Engine: engine}
-}
-
-type encodingStack struct {
-	ffmpeg       string
-	ffprobe      string
-	capabilities transcoding.FFmpegCapabilities
-	selector     transcoding.AACEncoderSelector
-}
-
-func (application *wiring) newEncoding(ctx context.Context) (encodingStack, error) {
-	config, localAppData := application.settings.config, application.settings.paths.LocalAppData
-	ffmpeg, err := transcoding.LocateFFmpeg(config.Encoder.FFmpeg, exec.LookPath, localAppData)
-	if err != nil {
-		return encodingStack{}, err
-	}
-	ffprobe, err := transcoding.LocateFFprobe(config.Encoder.FFprobe, exec.LookPath, localAppData)
-	if err != nil {
-		return encodingStack{}, err
-	}
-	capabilities, err := transcoding.DetectFFmpegCapabilities(ctx, application.runner, ffmpeg)
-	if err != nil {
-		return encodingStack{}, err
-	}
-	decoder := transcoding.NewFFmpegDecoder(application.runner, ffmpeg, capabilities)
-	selector := transcoding.NewAACEncoderSelector(
-		transcoding.NewFDKAACEncoder(decoder, config.Encoder.FDKLibrary),
-		transcoding.NewFFmpegAACEncoder(application.runner, ffmpeg, capabilities),
-	)
-	return encodingStack{ffmpeg: ffmpeg, ffprobe: ffprobe, capabilities: capabilities, selector: selector}, nil
-}
-
-type storageStack struct {
-	staging filesystem.StagingArea
-	store   *storage.BoltStore
+type stores struct {
+	bolt    *storage.BoltStore
+	staging *filesystem.StagingArea
 	reports storage.ReportStorage
-	logs    io.WriteCloser
+	runLog  *storage.RunLog
 }
 
-func (application *wiring) newStorage(ctx context.Context) (storageStack, error) {
-	if application.settings.paths.LocalAppData == "" {
-		return storageStack{}, errWorkFolderUnknown
-	}
-	workRoot := filepath.Join(application.settings.paths.LocalAppData, applicationFolder)
-	runID, idErr := runtime.NewRandomRunIDs().NewRunID(application.clock.Now())
-	staging, err := filesystem.PrepareStagingArea(workRoot, runID)
-	if err = errors.Join(idErr, err); err != nil {
-		return storageStack{}, err
-	}
-	store, err := storage.OpenBoltStore(filepath.Join(workRoot, stateFileName))
-	if err != nil {
-		return storageStack{}, errors.Join(err, staging.Cleanup(ctx))
-	}
-	application.onClose(func(context.Context) error { return store.Close() })
-	application.onClose(staging.Cleanup)
-	if err := staging.RemoveOtherRuns(); err != nil {
-		return storageStack{}, err
-	}
-	reports := storage.NewReportStorage(workRoot)
-	logs, err := reports.Create(ctx, string(runID), logFileName)
-	if err != nil {
-		return storageStack{}, err
-	}
-	application.onClose(func(context.Context) error { return logs.Close() })
-	return storageStack{staging: staging, store: store, reports: reports, logs: logs}, nil
+type parts struct {
+	encoding encoding
+	stores   stores
+	chain    advisor.AdvisorChain
+	tags     lastfm.LastFMClient
+	pool     runtime.WorkerPool
+	logger   *slog.Logger
 }
 
-func (application *wiring) newLastFMClient() lastfm.LastFMClient {
-	configured := application.settings.config.LastFM
-	settings := lastfm.LastFMSettings{APIKey: configured.APIKey, BaseURL: configured.BaseURL, Version: version}
-	backoff := lastfm.NewExponentialBackoff(rand.Float64, application.clock)
-	return lastfm.NewLastFMClient(settings, &http.Client{Timeout: shortHTTPTimeout}, lastfm.NewLastFMLimiter(), backoff)
-}
-
-func (application *wiring) newAdvisorChain() advisor.AdvisorChain {
-	advisorConfig := application.settings.config.Advisor
-	local := advisor.NewLlamaAdvisor(advisor.LlamaAdvisorSettings{
-		BaseURL: advisor.BuildLocalAdvisorURL(advisorConfig.Port), Model: advisor.ExtractModelName(advisorConfig.ModelFile),
-		LoadingTimeout: advisorLoadTimeout, Clock: application.clock,
-	}, &http.Client{Timeout: advisorHTTPTimeout})
-	server := advisor.NewLlamaServer(application.runner, advisor.LlamaServerSettings{
-		Executable: advisorConfig.LlamaServer, ModelFile: advisorConfig.ModelFile, Port: advisorConfig.Port,
-		HTTP: &http.Client{Timeout: healthHTTPTimeout}, Clock: application.clock,
+func (app application) buildRouter() cli.CommandRouter {
+	local := app.buildLocalAdvisor()
+	graph := app.buildParts(local)
+	checks := diagnostics.NewDiagnosticsService(version, transcoding.NewEncoderProbe(graph.encoding.tools, graph.encoding.fdk), graph.tags, graph.chain, filesystem.NewOutputProbe(app.config.Output.Dir))
+	importRuntime := runtime.NewImportRuntime(graph.pool, app.clock, runtime.NewRandomRunIDs(), cli.NewProgressPresenter(app.console.output, app.clock))
+	importer := app.buildImporter(graph, importRuntime)
+	workspace := storage.NewWorkspace(app.locations.WorkDir, storage.WorkspaceParts{
+		Store: graph.stores.bolt, Staging: graph.stores.staging, RunLog: graph.stores.runLog, Advisor: local, RunIDs: importRuntime,
 	})
-	lazy := advisor.NewLazyLlamaAdvisor(local, server)
-	application.onClose(lazy.Close)
-	chained := []advisor.ChainedAdvisor{lazy}
-	return advisor.NewAdvisorChain(chained, advisor.IsValidCreditSuggestion, advisor.ValidGenreSuggestion)
-}
-
-var consoleLogWriters = map[bool]func(console terminal) io.Writer{
-	true:  func(console terminal) io.Writer { return console.errors },
-	false: func(terminal) io.Writer { return nil },
-}
-
-type importStack struct {
-	importer logging.ImportServiceLogger
-	reports  storage.ReportStorage
-	defaults cli.ImportDefaults
-}
-
-func (application *wiring) newImportStack(ctx context.Context) (importStack, error) {
-	encoding, err := application.newEncoding(ctx)
-	if err != nil {
-		return importStack{}, err
+	watchPresenter := cli.NewWatchPresenter(app.console.output, app.errors)
+	watch := watching.NewWatchService(filesystem.NewFolderWatcher(app.clock), importer, filesystem.NewFolderArchiver(), filesystem.NewFolderStability(app.clock), watchPresenter)
+	runSession := session.NewSessionService(workspace, importer, watch, checks, desktop.NewFolderPicker(app.locations.ConfigDir))
+	imports := app.buildImportController(runSession, graph)
+	controllers := map[string]cli.CommandController{
+		cli.CommandRun:     cli.NewRunCommand(imports),
+		cli.CommandPreview: cli.NewPreviewCommand(imports),
+		cli.CommandWatch:   cli.NewWatchController(runSession, watchPresenter, app.buildWatchDefaults(graph)),
+		cli.CommandStatus:  cli.NewDiagnosticsController(runSession, cli.NewDiagnosticsPresenter(app.console.output, app.errors)),
+		cli.CommandVersion: cli.NewVersionController(checks, app.console.output),
+		cli.CommandConfig:  app.buildConfigCommand(),
+		cli.CommandAdvisor: app.buildAdvisorCommand(),
 	}
-	storage, err := application.newStorage(ctx)
-	if err != nil {
-		return importStack{}, err
+	return cli.NewCommandRouter(controllers, app.console.output)
+}
+
+func (app application) buildParts(local advisor.LazyLlamaAdvisor) parts {
+	workDir := app.locations.WorkDir
+	reports := storage.NewReportStorage(workDir)
+	runLog := storage.NewRunLog(reports)
+	return parts{
+		encoding: app.buildEncoding(),
+		stores:   stores{bolt: storage.NewBoltStore(filepath.Join(workDir, stateFileName)), staging: filesystem.NewStagingArea(workDir), reports: reports, runLog: runLog},
+		chain:    advisor.NewAdvisorChain([]advisor.ChainedAdvisor{local}, advisor.IsValidCreditSuggestion, advisor.ValidGenreSuggestion),
+		tags:     app.buildLastFMClient(),
+		pool:     runtime.NewWorkerPool(app.config.Encoder.Workers),
+		logger:   logging.NewLogger(runLog, cli.SelectLogOutput(app.request, app.console.errors)),
 	}
-	logger := logging.NewLogger(storage.logs, application.consoleLog())
-	progress := cli.NewProgressPresenter(application.settings.console.output, application.clock)
-	pool := runtime.NewWorkerPool(application.settings.config.Encoder.Workers)
-	importRuntime := runtime.NewImportRuntime(pool, application.clock, runtime.NewRandomRunIDs(), progress)
+}
+
+func (app application) buildEncoding() encoding {
+	configured := app.config.Encoder
+	tools := transcoding.NewToolchain(transcoding.ToolchainSettings{FFmpeg: configured.FFmpeg, FFprobe: configured.FFprobe, LookPath: exec.LookPath}, app.runner)
+	fdk := transcoding.NewFDKAACEncoder(transcoding.NewFFmpegDecoder(app.runner, tools), configured.FDKLibrary)
+	selector := transcoding.NewAACEncoderSelector(fdk, transcoding.NewFFmpegAACEncoder(app.runner, tools))
+	return encoding{tools: tools, fdk: fdk, selector: selector}
+}
+
+func (app application) buildLastFMClient() lastfm.LastFMClient {
+	configured := app.config.LastFM
+	settings := lastfm.LastFMSettings{APIKey: configured.APIKey, BaseURL: configured.BaseURL, Version: version}
+	backoff := lastfm.NewExponentialBackoff(rand.Float64, app.clock)
+	return lastfm.NewLastFMClient(settings, &http.Client{Timeout: lastfm.HTTPTimeout}, lastfm.NewLastFMLimiter(), backoff)
+}
+
+func (app application) buildLocalAdvisor() advisor.LazyLlamaAdvisor {
+	configured := app.config.Advisor
+	local := advisor.NewLlamaAdvisor(advisor.LlamaAdvisorSettings{
+		BaseURL: advisor.BuildLocalAdvisorURL(configured.Port), Model: advisor.ExtractModelName(configured.ModelFile),
+		LoadingTimeout: advisor.ModelLoadingTimeout, Clock: app.clock,
+	}, &http.Client{Timeout: advisor.CompletionTimeout})
+	server := advisor.NewLlamaServer(app.runner, advisor.LlamaServerSettings{
+		Executable: configured.LlamaServer, ModelFile: configured.ModelFile, Port: configured.Port,
+		HTTP: &http.Client{Timeout: advisor.HealthTimeout}, Clock: app.clock,
+	})
+	return advisor.NewLazyLlamaAdvisor(local, server)
+}
+
+func (app application) buildImporter(graph parts, importRuntime runtime.ImportRuntime) logging.ImportServiceLogger {
+	inspector := transcoding.NewFFprobeInspector(app.runner, graph.encoding.tools)
+	journal := storage.NewJournalRepository(graph.stores.bolt)
+	converter := conversion.NewConversionService(graph.encoding.selector, transcoding.NewFFmpegAudioCopier(app.runner, graph.encoding.tools), graph.stores.staging, journal, graph.pool)
+	publisher := publishing.NewPublishingService(
+		filesystem.NewLibraryIndex(), transcoding.NewFFmpegFinalizer(app.runner, graph.encoding.tools),
+		filesystem.NewFileMover(), transcoding.NewFFprobeVerifier(inspector), journal,
+	)
 	importer := importing.NewImportService(
-		application.newSourceService(encoding, pool),
-		logging.NewConversionServiceLogger(application.newConversionService(encoding, storage, pool), logger, application.clock),
-		application.newMetadataService(storage, pool),
-		faultinjection.WrapPublisher(logging.NewPublishingServiceLogger(application.newPublishingService(encoding, storage), logger, application.clock), application.settings.environment),
+		discovery.NewSourceService(filesystem.NewFileScanner(), inspector, graph.pool),
+		logging.NewConversionServiceLogger(converter, graph.logger, app.clock),
+		app.buildMetadata(graph),
+		logging.NewPublishingServiceLogger(publisher, graph.logger, app.clock),
 		importRuntime,
 	)
-	return importStack{
-		importer: logging.NewImportServiceLogger(importer, logger, application.clock),
-		reports:  storage.reports,
-		defaults: application.importDefaults(encoding),
-	}, nil
+	return logging.NewImportServiceLogger(importer, graph.logger, app.clock)
 }
 
-func (application *wiring) consoleLog() io.Writer {
-	return consoleLogWriters[application.settings.request.IsVerbose](application.settings.console)
-}
-
-func (application *wiring) importDefaults(encoding encodingStack) cli.ImportDefaults {
-	configured := application.settings.config
-	return cli.ImportDefaults{
-		Output: configured.Output.Dir, Profile: encoding.selector.SelectProfile(), Numbering: configured.ParseNumbering(),
-		Layout: configured.ParseLayout(), AlbumTemplate: configured.Output.AlbumTemplate,
-	}
-}
-
-func (application *wiring) newSourceService(encoding encodingStack, pool runtime.WorkerPool) discovery.SourceService {
-	inspector := transcoding.NewFFprobeInspector(application.runner, encoding.ffprobe)
-	return discovery.NewSourceService(filesystem.NewFileScanner(), inspector, pool)
-}
-
-func (application *wiring) newConversionService(encoding encodingStack, stores storageStack, pool runtime.WorkerPool) conversion.ConversionService {
-	copier := transcoding.NewFFmpegAudioCopier(application.runner, encoding.ffmpeg)
-	journal := storage.NewJournalRepository(stores.store)
-	return conversion.NewConversionService(encoding.selector, copier, stores.staging, journal, pool)
-}
-
-func (application *wiring) newMetadataService(stores storageStack, pool runtime.WorkerPool) metadata.MetadataService {
-	cache := storage.NewBoltCache(stores.store, application.clock)
-	chain := application.newAdvisorChain()
-	batchSize := application.settings.config.Advisor.BatchSize
-	credits := crediting.NewCreditService(advisor.NewCreditAdvisorCache(chain, cache, chain.Names()), batchSize)
-	tags := lastfm.NewLastFMCache(application.newLastFMClient(), cache)
-	genres := classification.NewGenreService(tags, advisor.NewGenreAdvisorCache(chain, cache, chain.Names()), pool, batchSize)
+func (app application) buildMetadata(graph parts) metadata.MetadataService {
+	advice := storage.NewBoltCache(graph.stores.bolt, app.clock, advisor.CacheBucket)
+	batchSize := app.config.Advisor.BatchSize
+	credits := crediting.NewCreditService(advisor.NewCreditAdvisorCache(graph.chain, advice, graph.chain.Names()), batchSize)
+	tags := lastfm.NewLastFMCache(graph.tags, storage.NewBoltCache(graph.stores.bolt, app.clock, lastfm.CacheBucket))
+	genres := classification.NewGenreService(tags, advisor.NewGenreAdvisorCache(graph.chain, advice, graph.chain.Names()), graph.pool, batchSize)
 	return metadata.NewMetadataService(credits, genres)
 }
 
-func (application *wiring) newPublishingService(encoding encodingStack, stores storageStack) publishing.PublishingService {
-	inspector := transcoding.NewFFprobeInspector(application.runner, encoding.ffprobe)
-	return publishing.NewPublishingService(
-		filesystem.NewLibraryIndex(),
-		transcoding.NewFFmpegFinalizer(application.runner, encoding.ffmpeg),
-		filesystem.NewFileMover(),
-		transcoding.NewFFprobeVerifier(inspector),
-		storage.NewJournalRepository(stores.store),
-	)
+func (app application) buildImportDefaults(graph parts) cli.ImportDefaults {
+	return cli.ImportDefaults{
+		Output: app.config.Output.Dir, Profile: graph.encoding.selector, Numbering: app.config.ParseNumbering(),
+		Layout: app.config.ParseLayout(), AlbumTemplate: app.config.Output.AlbumTemplate,
+	}
 }
 
-func (application *wiring) newImportController(ctx context.Context) (cli.ImportController, error) {
-	stack, err := application.newImportStack(ctx)
-	if err != nil {
-		return cli.ImportController{}, err
-	}
-	console := application.settings.console
+func (app application) buildImportController(runSession session.SessionService, graph parts) cli.ImportController {
 	return cli.NewImportController(
-		cli.ImportServices{Importer: stack.importer, Previewer: stack.importer, Reporter: cli.NewReportPresenter(stack.reports)},
-		cli.ImportDesktop{Chooser: application.newFolderPicker(), Finisher: desktop.NewDesktopShell(application.runner, stack.reports)},
-		cli.NewImportPresenter(console.output, application.errors),
-		cli.ImportSettings{Defaults: stack.defaults, OpensFiles: application.settings.request.OpensFiles},
-	), nil
-}
-
-func (application *wiring) newFolderPicker() desktop.FolderPicker {
-	return desktop.NewFolderPicker(filepath.Join(application.settings.paths.AppData, applicationFolder))
-}
-
-func (application *wiring) watchCommand(ctx context.Context) (cli.CommandController, error) {
-	stack, err := application.newImportStack(ctx)
-	if err != nil {
-		return nil, err
-	}
-	presenter := cli.NewWatchPresenter(application.settings.console.output, application.errors)
-	watch := watching.NewWatchService(
-		filesystem.NewFolderWatcher(application.clock), stack.importer,
-		filesystem.NewFolderArchiver(), filesystem.NewFolderStability(application.clock), presenter,
+		cli.ImportServices{Importer: runSession, Previewer: runSession, Reporter: cli.NewReportPresenter(graph.stores.reports)},
+		desktop.NewDesktopShell(graph.stores.reports),
+		cli.NewImportPresenter(app.console.output, app.errors),
+		cli.ImportSettings{Defaults: app.buildImportDefaults(graph), OpensFiles: app.request.OpensFiles},
 	)
-	configured := application.settings.config.Watch
-	defaults := cli.WatchDefaults{Inbox: configured.Inbox, QuietPeriod: configured.Settle, Import: stack.defaults}
-	return cli.NewWatchController(watch, presenter, defaults), nil
+}
+
+func (app application) buildWatchDefaults(graph parts) cli.WatchDefaults {
+	configured := app.config.Watch
+	return cli.WatchDefaults{Inbox: configured.Inbox, QuietPeriod: configured.Settle, Import: app.buildImportDefaults(graph)}
+}
+
+func (app application) buildConfigCommand() cli.CommandController {
+	presenter := cli.NewSettingsPresenter(app.console.output, app.errors)
+	return cli.NewSettingsController(settings.NewSettingsService(app.store), presenter)
+}
+
+func (app application) buildAdvisorCommand() cli.CommandController {
+	presenter := cli.NewSetupPresenter(app.console.output, app.errors)
+	downloader := artifacts.NewHTTPArtifactDownloader(&http.Client{}, presenter)
+	installer := setup.NewSetupService(downloader, artifacts.NewZipExtractor(), app.store, presenter)
+	advisorArtifacts := cli.AdvisorArtifacts{
+		Folder:  filepath.Join(app.locations.WorkDir, advisorFolder),
+		Runtime: artifacts.BuildAdvisorRuntimeArtifacts(), Model: artifacts.BuildAdvisorModelArtifact(),
+		ServerExecutableName: artifacts.AdvisorServerExecutable,
+	}
+	return cli.NewSetupController(installer, presenter, advisorArtifacts)
 }

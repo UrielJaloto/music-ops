@@ -21,26 +21,29 @@ type DecodeRequest struct {
 }
 
 type FFmpegDecoder struct {
-	runner       ProcessExecutor
-	executable   string
-	capabilities FFmpegCapabilities
+	runner ProcessExecutor
+	tools  ToolResolver
 }
 
-func NewFFmpegDecoder(runner ProcessExecutor, executable string, capabilities FFmpegCapabilities) FFmpegDecoder {
-	return FFmpegDecoder{runner: runner, executable: executable, capabilities: capabilities}
+func NewFFmpegDecoder(runner ProcessExecutor, tools ToolResolver) FFmpegDecoder {
+	return FFmpegDecoder{runner: runner, tools: tools}
 }
 
 func (decoder FFmpegDecoder) Stream(ctx context.Context, request DecodeRequest, sink io.Writer) error {
-	arguments := buildDecodeArguments(toProcessPath(request.Source), decoder.pcmFilter(request), request.Profile.CountOutputChannels(request.Quality))
-	_, err := decoder.runner.Run(ctx, process.ProcessRequest{Executable: decoder.executable, Arguments: arguments, Stdout: sink})
+	tools, err := decoder.tools.ResolveTools(ctx)
+	if err != nil {
+		return err
+	}
+	arguments := buildDecodeArguments(toProcessPath(request.Source), tools.Capabilities.buildPCMFilter(request), request.Profile.CountOutputChannels(request.Quality))
+	_, err = decoder.runner.Run(ctx, process.ProcessRequest{Executable: tools.FFmpeg, Arguments: arguments, Stdout: sink})
 	return err
 }
 
-func (decoder FFmpegDecoder) pcmFilter(request DecodeRequest) string {
+func (capabilities FFmpegCapabilities) buildPCMFilter(request DecodeRequest) string {
 	if !request.Profile.NeedsResampling(request.Quality) {
 		return pcmFormatOnly
 	}
-	return decoder.capabilities.BuildResampleFilter(request.Profile.SampleRate()) + ":" + pcmOutputFormat
+	return capabilities.BuildResampleFilter(request.Profile.SampleRate()) + ":" + pcmOutputFormat
 }
 
 func buildDecodeArguments(source, filter string, channels int) []string {

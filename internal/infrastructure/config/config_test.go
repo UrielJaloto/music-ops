@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
-	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/services/settings"
 )
@@ -23,10 +22,15 @@ func environmentOf(values map[string]string) func(string) (string, bool) {
 	}
 }
 
-func configStoreWithFile(t *testing.T, content string, environment map[string]string) ConfigStore {
+func storeAt(path string) ConfigStore {
+	return NewConfigStore(Locations{ConfigDir: filepath.Dir(path)}, environmentOf(nil))
+}
+
+func configStoreWithFile(t *testing.T, content string, musicDir string, environment map[string]string) ConfigStore {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "music-ops", "config.yaml")
-	store := NewConfigStore(path, environmentOf(environment))
+	configDir := filepath.Join(t.TempDir(), "music-ops")
+	path := filepath.Join(configDir, "config.yaml")
+	store := NewConfigStore(Locations{ConfigDir: configDir, MusicDir: musicDir}, environmentOf(environment))
 	if content == "" {
 		return store
 	}
@@ -45,11 +49,10 @@ func writeTestFile(t *testing.T, path, content string) {
 }
 
 func TestConfigStore_Load_Defaults(t *testing.T) {
-	config, err := configStoreWithFile(t, "", map[string]string{"USERPROFILE": `C:\Users\someone`}).Load(context.Background(), nil)
+	config, err := configStoreWithFile(t, "", filepath.Join(`C:\Users\someone`, "Music"), nil).Load(context.Background(), nil)
 
 	expected := Config{
 		Output:        OutputConfig{Dir: filepath.Join(`C:\Users\someone`, "Music"), Layout: "flat", AlbumTemplate: "{albumartist} - {album}"},
-		Encoder:       EncoderConfig{FDKLibrary: `C:\Program Files\freac\codecs\FDK-AAC.dll`},
 		LastFM:        LastFMConfig{BaseURL: "https://ws.audioscrobbler.com/2.0/"},
 		Advisor:       AdvisorConfig{Port: 8089, BatchSize: 40},
 		NumberingMode: "per_directory",
@@ -58,8 +61,8 @@ func TestConfigStore_Load_Defaults(t *testing.T) {
 	if err != nil || config != expected {
 		t.Fatalf("config = %+v err = %v", config, err)
 	}
-	if config.ParseLayout() != filename.LayoutFlat || config.ParseNumbering() != albums.NumberingPerDirectory || config.EncodingEngine() != audio.EngineFDK {
-		t.Fatalf("conversions = %v %v %v", config.ParseLayout(), config.ParseNumbering(), config.EncodingEngine())
+	if config.ParseLayout() != filename.LayoutFlat || config.ParseNumbering() != albums.NumberingPerDirectory {
+		t.Fatalf("conversions = %v %v", config.ParseLayout(), config.ParseNumbering())
 	}
 }
 
@@ -77,7 +80,7 @@ func TestConfigStore_Load_Precedence(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			config, err := configStoreWithFile(t, testCase.file, testCase.environment).Load(context.Background(), testCase.overrides)
+			config, err := configStoreWithFile(t, testCase.file, "", testCase.environment).Load(context.Background(), testCase.overrides)
 
 			if err != nil || config.Output.Dir != testCase.expected {
 				t.Fatalf("dir = %q err = %v", config.Output.Dir, err)
@@ -103,7 +106,7 @@ func TestConfigStore_Load_Errors(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := configStoreWithFile(t, testCase.file, nil).Load(context.Background(), testCase.overrides)
+			_, err := configStoreWithFile(t, testCase.file, "", nil).Load(context.Background(), testCase.overrides)
 
 			if !errors.Is(err, testCase.expectedError) {
 				t.Fatalf("error = %v, want %v", err, testCase.expectedError)
@@ -113,7 +116,7 @@ func TestConfigStore_Load_Errors(t *testing.T) {
 }
 
 func TestConfigStore_Load_MalformedFile(t *testing.T) {
-	_, err := configStoreWithFile(t, "output: [", nil).Load(context.Background(), nil)
+	_, err := configStoreWithFile(t, "output: [", "", nil).Load(context.Background(), nil)
 
 	if err == nil {
 		t.Fatal("malformed YAML accepted")
@@ -141,7 +144,7 @@ func TestConfigStore_Load_Boundaries(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.key+"="+strconv.Itoa(testCase.value), func(t *testing.T) {
-			_, err := configStoreWithFile(t, "", nil).Load(context.Background(), map[string]string{testCase.key: strconv.Itoa(testCase.value)})
+			_, err := configStoreWithFile(t, "", "", nil).Load(context.Background(), map[string]string{testCase.key: strconv.Itoa(testCase.value)})
 
 			if (err == nil) != testCase.isValid || (err != nil && !errors.Is(err, settings.ErrSettingInvalid)) {
 				t.Fatalf("err = %v, valid = %v", err, testCase.isValid)
@@ -151,17 +154,17 @@ func TestConfigStore_Load_Boundaries(t *testing.T) {
 }
 
 func TestConfigStore_Load_Conversions(t *testing.T) {
-	overrides := map[string]string{"output.layout": "album_folders", "numbering.mode": "keep", "encoder.fdk_library": ""}
+	overrides := map[string]string{"output.layout": "album_folders", "numbering.mode": "keep"}
 
-	config, err := configStoreWithFile(t, "", nil).Load(context.Background(), overrides)
+	config, err := configStoreWithFile(t, "", "", nil).Load(context.Background(), overrides)
 
-	if err != nil || config.ParseLayout() != filename.LayoutAlbumFolders || config.ParseNumbering() != albums.NumberingKeepSource || config.EncodingEngine() != audio.EngineNative {
+	if err != nil || config.ParseLayout() != filename.LayoutAlbumFolders || config.ParseNumbering() != albums.NumberingKeepSource {
 		t.Fatalf("config = %+v err = %v", config, err)
 	}
 }
 
 func TestConfigStore_Save(t *testing.T) {
-	store := configStoreWithFile(t, "", nil)
+	store := configStoreWithFile(t, "", "", nil)
 
 	if err := store.Save(context.Background(), "output.dir", "E:/Music"); err != nil {
 		t.Fatal(err)
@@ -191,7 +194,7 @@ func TestConfigStore_Save_Errors(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			store := configStoreWithFile(t, "", nil)
+			store := configStoreWithFile(t, "", "", nil)
 
 			err := store.Save(context.Background(), testCase.key, testCase.value)
 
@@ -206,7 +209,7 @@ func TestConfigStore_Save_Errors(t *testing.T) {
 }
 
 func TestConfigStore_SettingsStoreContract(t *testing.T) {
-	store := configStoreWithFile(t, "lastfm:\n  api_key: secret\n", map[string]string{"MUSIC_OPS_WATCH_INBOX": "D:/Inbox"})
+	store := configStoreWithFile(t, "lastfm:\n  api_key: secret\n", "", map[string]string{"MUSIC_OPS_WATCH_INBOX": "D:/Inbox"})
 
 	values, err := store.Values(context.Background())
 
@@ -216,15 +219,12 @@ func TestConfigStore_SettingsStoreContract(t *testing.T) {
 	if len(store.Keys()) != 16 || store.Keys()[0] != "output.dir" {
 		t.Fatalf("keys = %v", store.Keys())
 	}
-	if DefaultConfigPath(`C:\AppData`) != filepath.Join(`C:\AppData`, "music-ops", "config.yaml") {
-		t.Fatalf("default path = %s", DefaultConfigPath(`C:\AppData`))
-	}
 }
 
 func TestConfigStore_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	store := configStoreWithFile(t, "", nil)
+	store := configStoreWithFile(t, "", "", nil)
 
 	if _, err := store.Load(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("load err = %v", err)
@@ -235,7 +235,7 @@ func TestConfigStore_CancelledContext(t *testing.T) {
 }
 
 func TestConfigStore_Load_OutputWithoutProfileStaysEmpty(t *testing.T) {
-	config, err := configStoreWithFile(t, "", nil).Load(context.Background(), nil)
+	config, err := configStoreWithFile(t, "", "", nil).Load(context.Background(), nil)
 
 	if err != nil || config.Output.Dir != "" {
 		t.Fatalf("dir = %q err = %v", config.Output.Dir, err)
@@ -243,7 +243,7 @@ func TestConfigStore_Load_OutputWithoutProfileStaysEmpty(t *testing.T) {
 }
 
 func TestConfigStore_Load_ConfiguredOutputWins(t *testing.T) {
-	store := configStoreWithFile(t, "output:\n  dir: E:/Library\n", map[string]string{"USERPROFILE": `C:\Users\someone`})
+	store := configStoreWithFile(t, "output:\n  dir: E:/Library\n", `C:\Users\someone\Music`, nil)
 
 	config, err := store.Load(context.Background(), nil)
 
@@ -252,11 +252,39 @@ func TestConfigStore_Load_ConfiguredOutputWins(t *testing.T) {
 	}
 }
 
-func TestReadEnvironmentPaths(t *testing.T) {
-	paths := ReadEnvironmentPaths(environmentOf(map[string]string{"APPDATA": `C:\Roaming`, "LOCALAPPDATA": `C:\Local`}))
+func TestFindUserLocations_FromStandardLibrary(t *testing.T) {
+	configDir, configErr := os.UserConfigDir()
+	cacheDir, cacheErr := os.UserCacheDir()
+	homeDir, homeErr := os.UserHomeDir()
+	if err := errors.Join(configErr, cacheErr, homeErr); err != nil {
+		t.Fatal(err)
+	}
 
-	if paths != (EnvironmentPaths{AppData: `C:\Roaming`, LocalAppData: `C:\Local`}) {
-		t.Fatalf("paths = %+v", paths)
+	locations := FindUserLocations()
+
+	expected := Locations{
+		ConfigDir: filepath.Join(configDir, "music-ops"),
+		WorkDir:   filepath.Join(cacheDir, "music-ops"),
+		MusicDir:  filepath.Join(homeDir, "Music"),
+	}
+	if locations != expected {
+		t.Fatalf("locations = %+v, want %+v", locations, expected)
+	}
+}
+
+func TestResolveUserFolder_UnknownBaseIsEmpty(t *testing.T) {
+	folder := resolveUserFolder(func() (string, error) { return "", errors.New("unset") }, "music-ops")
+
+	if folder != "" {
+		t.Fatalf("folder = %q", folder)
+	}
+}
+
+func TestConfigStore_Location_InsideConfigDir(t *testing.T) {
+	store := NewConfigStore(Locations{ConfigDir: filepath.Join("base", "music-ops")}, environmentOf(nil))
+
+	if store.Location() != filepath.Join("base", "music-ops", "config.yaml") {
+		t.Fatalf("location = %s", store.Location())
 	}
 }
 
@@ -270,15 +298,15 @@ func TestConfigStore_FileSystemFailures(t *testing.T) {
 		{name: "ConfigurationIsAFolder", prepare: func(t *testing.T, root string) ConfigStore {
 			path := filepath.Join(root, "config.yaml")
 			writeTestFile(t, filepath.Join(path, "inside"), "x")
-			return NewConfigStore(path, environmentOf(nil))
+			return storeAt(path)
 		}, expected: "reading configuration"},
 		{name: "TemporaryIsAFolder", prepare: func(t *testing.T, root string) ConfigStore {
 			path := filepath.Join(root, "config.yaml")
 			writeTestFile(t, filepath.Join(path+".tmp", "inside"), "x")
-			return NewConfigStore(path, environmentOf(nil))
+			return storeAt(path)
 		}, expected: "writing configuration"},
 		{name: "RenameFails", prepare: func(t *testing.T, root string) ConfigStore {
-			store := NewConfigStore(filepath.Join(root, "config.yaml"), environmentOf(nil))
+			store := storeAt(filepath.Join(root, "config.yaml"))
 			store.rename = func(string, string) error { return errRename }
 			return store
 		}, expected: "replacing configuration"},
@@ -300,9 +328,26 @@ func TestConfigStore_Load_ConfigurationIsAFolder(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	writeTestFile(t, filepath.Join(path, "inside"), "x")
 
-	_, err := NewConfigStore(path, environmentOf(nil)).Load(context.Background(), nil)
+	_, err := storeAt(path).Load(context.Background(), nil)
 
 	if err == nil || !strings.Contains(err.Error(), "reading configuration") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestConfigStore_UnknownConfigFolder(t *testing.T) {
+	store := NewConfigStore(Locations{MusicDir: "M"}, environmentOf(nil))
+
+	config, loadErr := store.Load(context.Background(), nil)
+	saveErr := store.Save(context.Background(), "output.dir", "x")
+
+	if loadErr != nil || config.Output.Dir != "M" {
+		t.Fatalf("config = %+v err = %v", config, loadErr)
+	}
+	if !errors.Is(saveErr, ErrConfigFolderUnknown) {
+		t.Fatalf("save err = %v", saveErr)
+	}
+	if store.Location() != "" {
+		t.Fatalf("location = %q", store.Location())
 	}
 }

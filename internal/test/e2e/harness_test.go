@@ -20,9 +20,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
-const defaultFDKLibrary = `C:\Program Files\freac\codecs\FDK-AAC.dll`
+const processEventTimeout = 2 * time.Minute
 
 var e2eBinary string
 
@@ -67,7 +68,6 @@ type e2eEnvironment struct {
 	localOracle  *adviceOracle
 	llama        *fakeLlama
 	settings     map[string]string
-	extraEnv     []string
 }
 
 type e2eResult struct {
@@ -135,10 +135,8 @@ func (environment *e2eEnvironment) defaultSettings() map[string]string {
 }
 
 func fdkLibrary() string {
-	if path, isSet := os.LookupEnv("MUSIC_OPS_ENCODER_FDK_LIBRARY"); isSet && path != "" {
-		return path
-	}
-	return defaultFDKLibrary
+	path, _ := os.LookupEnv("MUSIC_OPS_ENCODER_FDK_LIBRARY")
+	return path
 }
 
 func (environment *e2eEnvironment) useNativeEncoder() {
@@ -190,25 +188,56 @@ func (environment *e2eEnvironment) childEnvironment() []string {
 		}
 		inherited = append(inherited, entry)
 	}
-	return append(append(inherited, isolated...), environment.extraEnv...)
+	return append(inherited, isolated...)
+}
+
+type runningProcess struct {
+	environment *e2eEnvironment
+	command     *exec.Cmd
+	previous    []string
+	stdout      bytes.Buffer
+	stderr      bytes.Buffer
 }
 
 func (environment *e2eEnvironment) run(arguments ...string) e2eResult {
 	environment.t.Helper()
+	return environment.start(arguments...).wait()
+}
+
+func (environment *e2eEnvironment) start(arguments ...string) *runningProcess {
+	environment.t.Helper()
 	environment.writeConfig()
-	previous := environment.reportPaths()
-	command := exec.CommandContext(context.Background(), e2eBinary, append(arguments, "--no-open")...)
-	command.Env = environment.childEnvironment()
-	command.Stdin = strings.NewReader("")
-	var stdout, stderr bytes.Buffer
-	command.Stdout, command.Stderr = &stdout, &stderr
-	err := command.Run()
-	result := e2eResult{ExitCode: extractExitCode(err), Stdout: stdout.String(), Stderr: stderr.String()}
-	result.Report = environment.newReport(previous)
+	running := &runningProcess{environment: environment, previous: environment.reportPaths()}
+	running.command = exec.CommandContext(context.Background(), e2eBinary, arguments...)
+	running.command.Env = environment.childEnvironment()
+	running.command.Stdin = strings.NewReader("")
+	running.command.Stdout, running.command.Stderr = &running.stdout, &running.stderr
+	startInOwnProcessGroup(running.command)
+	if err := running.command.Start(); err != nil {
+		environment.t.Fatal(err)
+	}
+	return running
+}
+
+func (running *runningProcess) wait() e2eResult {
+	err := running.command.Wait()
+	result := e2eResult{ExitCode: exitCodeOf(err), Stdout: running.stdout.String(), Stderr: running.stderr.String()}
+	result.Report = running.environment.newReport(running.previous)
 	return result
 }
 
-func extractExitCode(err error) int {
+func (running *runningProcess) waitFor(reached <-chan struct{}) {
+	running.environment.t.Helper()
+	select {
+	case <-reached:
+	case <-time.After(processEventTimeout):
+		_ = running.command.Process.Kill()
+		result := running.wait()
+		running.environment.t.Fatalf("the process never reached the trigger: %+v", result)
+	}
+}
+
+func exitCodeOf(err error) int {
 	if err == nil {
 		return 0
 	}

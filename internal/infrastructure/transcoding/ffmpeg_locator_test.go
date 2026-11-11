@@ -29,38 +29,29 @@ func createExecutable(t *testing.T, path string, modifiedAt time.Time) string {
 	return path
 }
 
-func TestLocateFFmpeg_SearchOrder(t *testing.T) {
-	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	localAppData := t.TempDir()
-	packages := filepath.Join(localAppData, "Microsoft", "WinGet", "Packages")
-	older := createExecutable(t, filepath.Join(packages, "Gyan.FFmpeg_1", "ffmpeg-7.0", "bin", buildExecutableFileName("ffmpeg")), base)
-	newer := createExecutable(t, filepath.Join(packages, "Gyan.FFmpeg_2", "ffmpeg-8.0", "bin", buildExecutableFileName("ffmpeg")), base.Add(time.Hour))
-	createExecutable(t, filepath.Join(packages, "Other.Tool", "x", "bin", buildExecutableFileName("ffmpeg")), base.Add(2*time.Hour))
-	linkFolder := filepath.Join(localAppData, "Microsoft", "WinGet", "Links")
-	configured := createExecutable(t, filepath.Join(t.TempDir(), "custom-ffmpeg.exe"), base)
+func isolateToolFolders(t *testing.T) {
+	t.Helper()
+	empty := t.TempDir()
+	t.Setenv("LOCALAPPDATA", empty)
+	t.Setenv("XDG_CACHE_HOME", empty)
+	t.Setenv("HOME", empty)
+}
+
+func TestLocateFFmpeg_ConfiguredBeforePath(t *testing.T) {
+	configured := createExecutable(t, filepath.Join(t.TempDir(), "custom-ffmpeg"), time.Now())
 	cases := []struct {
 		name       string
 		configured string
-		lookPath   map[string]string
-		hasLink    bool
 		expected   string
 	}{
-		{name: "ConfiguredWins", configured: configured, lookPath: map[string]string{"ffmpeg": "path-ffmpeg"}, hasLink: true, expected: configured},
-		{name: "PathBeforeLinks", lookPath: map[string]string{"ffmpeg": "path-ffmpeg"}, hasLink: true, expected: "path-ffmpeg"},
-		{name: "LinksBeforePackages", hasLink: true, expected: filepath.Join(linkFolder, buildExecutableFileName("ffmpeg"))},
-		{name: "NewestPackage", expected: newer},
+		{name: "ConfiguredWins", configured: configured, expected: configured},
+		{name: "PathWhenNotConfigured", expected: "path-ffmpeg"},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			link := filepath.Join(linkFolder, buildExecutableFileName("ffmpeg"))
-			_ = os.Remove(link)
-			if testCase.hasLink {
-				createExecutable(t, link, base)
-			}
+			path, err := LocateFFmpeg(testCase.configured, lookPathFinding(map[string]string{"ffmpeg": "path-ffmpeg"}))
 
-			path, err := LocateFFmpeg(testCase.configured, lookPathFinding(testCase.lookPath), localAppData)
-
-			if err != nil || path != testCase.expected || path == older {
+			if err != nil || path != testCase.expected {
 				t.Fatalf("path = %s err = %v", path, err)
 			}
 		})
@@ -68,7 +59,7 @@ func TestLocateFFmpeg_SearchOrder(t *testing.T) {
 }
 
 func TestLocateFFprobe_UsesItsOwnName(t *testing.T) {
-	path, err := LocateFFprobe("", lookPathFinding(map[string]string{"ffprobe": "path-ffprobe", "ffmpeg": "path-ffmpeg"}), t.TempDir())
+	path, err := LocateFFprobe("", lookPathFinding(map[string]string{"ffprobe": "path-ffprobe", "ffmpeg": "path-ffmpeg"}))
 
 	if err != nil || path != "path-ffprobe" {
 		t.Fatalf("path = %s err = %v", path, err)
@@ -76,6 +67,7 @@ func TestLocateFFprobe_UsesItsOwnName(t *testing.T) {
 }
 
 func TestLocateFFmpeg_Missing(t *testing.T) {
+	isolateToolFolders(t)
 	cases := []struct {
 		name       string
 		configured string
@@ -87,7 +79,7 @@ func TestLocateFFmpeg_Missing(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := LocateFFmpeg(testCase.configured, lookPathFinding(testCase.lookPath), t.TempDir())
+			_, err := LocateFFmpeg(testCase.configured, lookPathFinding(testCase.lookPath))
 
 			if !errors.Is(err, diagnostics.ErrFFmpegMissing) {
 				t.Fatalf("err = %v", err)
@@ -96,11 +88,31 @@ func TestLocateFFmpeg_Missing(t *testing.T) {
 	}
 }
 
-func TestFFmpegForDiagnostics(t *testing.T) {
-	found := FFmpegForDiagnostics("", lookPathFinding(map[string]string{"ffmpeg": "path-ffmpeg"}), t.TempDir())
-	missing := FFmpegForDiagnostics("", lookPathFinding(nil), t.TempDir())
+func TestLocateFDKLibrary_ConfiguredWinsEvenWhenMissing(t *testing.T) {
+	configured := filepath.Join(t.TempDir(), "custom-fdk")
 
-	if found != "path-ffmpeg" || missing != buildExecutableFileName("ffmpeg") {
-		t.Fatalf("found = %s missing = %s", found, missing)
+	if path := LocateFDKLibrary(configured); path != configured {
+		t.Fatalf("path = %s", path)
+	}
+}
+
+func TestFindFirstFile_SkipsMissingAndFolders(t *testing.T) {
+	folder := t.TempDir()
+	file := createExecutable(t, filepath.Join(folder, "tool"), time.Now())
+	cases := []struct {
+		name       string
+		candidates []string
+		expected   string
+	}{
+		{name: "None"},
+		{name: "OnlyMissingAndFolder", candidates: []string{filepath.Join(folder, "missing"), folder}},
+		{name: "FileAfterMissing", candidates: []string{filepath.Join(folder, "missing"), folder, file}, expected: file},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if path := findFirstFile(testCase.candidates); path != testCase.expected {
+				t.Fatalf("path = %q", path)
+			}
+		})
 	}
 }

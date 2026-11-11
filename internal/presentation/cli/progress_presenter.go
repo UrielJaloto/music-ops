@@ -16,6 +16,7 @@ const (
 	progressFilled     = "█"
 	progressEmpty      = "░"
 	progressRedrawGap  = 100 * time.Millisecond
+	progressTickGap    = time.Second
 	progressFailedName = "failed"
 	carriageReturn     = "\r"
 	clearToEndOfLine   = "\x1b[K"
@@ -33,6 +34,7 @@ var stageLabels = map[string]string{
 
 type ProgressClock interface {
 	Now() time.Time
+	After(duration time.Duration) <-chan time.Time
 }
 
 type stageProgress struct {
@@ -55,6 +57,8 @@ type progressState struct {
 	lastDrawAt time.Time
 	isTerminal bool
 	isDetected bool
+	isOpen     bool
+	isTicking  bool
 }
 
 func NewProgressPresenter(output io.Writer, clock ProgressClock) ProgressPresenter {
@@ -66,7 +70,32 @@ func (presenter ProgressPresenter) StageStarted(stage string, total int) {
 	defer presenter.mutex.Unlock()
 	now := presenter.clock.Now()
 	presenter.state.stage = stageProgress{name: stage, total: total, startedAt: now}
+	presenter.state.isOpen = true
 	presenter.draw(now)
+	if presenter.isTerminal() && !presenter.state.isTicking {
+		presenter.state.isTicking = true
+		go presenter.tick()
+	}
+}
+
+func (presenter ProgressPresenter) tick() {
+	for {
+		<-presenter.clock.After(progressTickGap)
+		if !presenter.redrawOpenStage() {
+			return
+		}
+	}
+}
+
+func (presenter ProgressPresenter) redrawOpenStage() bool {
+	presenter.mutex.Lock()
+	defer presenter.mutex.Unlock()
+	if !presenter.state.isOpen {
+		presenter.state.isTicking = false
+		return false
+	}
+	presenter.draw(presenter.clock.Now())
+	return true
 }
 
 func (presenter ProgressPresenter) TrackFinished(stage, _ string, status string) {
@@ -91,6 +120,7 @@ func (presenter ProgressPresenter) StageFinished(stage string) {
 	if presenter.state.stage.name != stage {
 		return
 	}
+	presenter.state.isOpen = false
 	presenter.draw(presenter.clock.Now())
 	if presenter.isTerminal() {
 		presenter.write("\n")

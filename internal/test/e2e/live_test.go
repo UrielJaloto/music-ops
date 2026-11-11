@@ -17,8 +17,7 @@ const liveLastFMURL = "https://ws.audioscrobbler.com/2.0/"
 
 func liveConfig(t *testing.T) config.Config {
 	t.Helper()
-	paths := config.ReadEnvironmentPaths(os.LookupEnv)
-	loaded, err := config.NewConfigStore(config.DefaultConfigPath(paths.AppData), os.LookupEnv).Load(context.Background(), nil)
+	loaded, err := config.NewConfigStore(config.FindUserLocations(), os.LookupEnv).Load(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

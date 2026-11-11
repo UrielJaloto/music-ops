@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	advisorCacheBucket = "advisor"
-	advisorCacheTTL    = 365 * 24 * time.Hour
+	CacheBucket     = "advisor"
+	advisorCacheTTL = 365 * 24 * time.Hour
 )
 
 type CreditSuggester interface {
@@ -121,7 +121,7 @@ func (task cachedTask[R, S]) lookup(ctx context.Context, requests []R) (cacheLoo
 	found := cacheLookup[R, S]{answers: []S{}, misses: []R{}, cacheKeys: map[string]string{}}
 	for _, request := range requests {
 		key := task.buildCacheKey(request)
-		stored, isHit, err := task.cache.Get(ctx, advisorCacheBucket, key)
+		stored, isHit, err := task.cache.Get(ctx, key)
 		if err != nil {
 			return found, err
 		}
@@ -154,7 +154,7 @@ func (task cachedTask[R, S]) store(ctx context.Context, answers []S, cacheKeys m
 			continue
 		}
 		encoded, _ := json.Marshal(answer)
-		if err := task.cache.Put(ctx, advisorCacheBucket, key, encoded, advisorCacheTTL); err != nil {
+		if err := task.cache.Put(ctx, key, encoded, advisorCacheTTL); err != nil {
 			return err
 		}
 	}
@@ -173,6 +173,6 @@ func isFile(path string) bool {
 }
 
 type AdvisorCacheStore interface {
-	Get(ctx context.Context, bucket, key string) ([]byte, bool, error)
-	Put(ctx context.Context, bucket, key string, value []byte, ttl time.Duration) error
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Put(ctx context.Context, key string, value []byte, ttl time.Duration) error
 }

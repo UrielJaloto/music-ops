@@ -20,11 +20,8 @@ import (
 )
 
 func fdkLibraryPath() string {
-	path, isSet := os.LookupEnv("MUSIC_OPS_ENCODER_FDK_LIBRARY")
-	if !isSet || path == "" {
-		return defaultFDKLibraryPath
-	}
-	return path
+	configured, _ := os.LookupEnv("MUSIC_OPS_ENCODER_FDK_LIBRARY")
+	return LocateFDKLibrary(configured)
 }
 
 func newTestFDKEncoder(t *testing.T) FDKAACEncoder {
@@ -35,13 +32,13 @@ func newTestFDKEncoder(t *testing.T) FDKAACEncoder {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewFDKAACEncoder(NewFFmpegDecoder(process.NewProcessRunner(), ffmpeg, capabilities), fdkLibraryPath())
+	return NewFDKAACEncoder(NewFFmpegDecoder(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg, Capabilities: capabilities}), fdkLibraryPath())
 }
 
 func inspectedQuality(t *testing.T, path string) audio.AudioQuality {
 	t.Helper()
 	_, ffprobe := requireFFmpeg(t)
-	inspected, err := NewFFprobeInspector(process.NewProcessRunner(), ffprobe).Inspect(context.Background(), path)
+	inspected, err := NewFFprobeInspector(process.NewProcessRunner(), fixedTools{FFprobe: ffprobe}).Inspect(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +92,7 @@ func assertPublishableAudio(t *testing.T, path string, expectedBitrate, expected
 		t.Fatalf("bitrate = %d, want %d ± 8 %%", bitrate, expectedBitrate)
 	}
 	_, ffprobe := requireFFmpeg(t)
-	verifier := NewFFprobeVerifier(NewFFprobeInspector(process.NewProcessRunner(), ffprobe))
+	verifier := NewFFprobeVerifier(NewFFprobeInspector(process.NewProcessRunner(), fixedTools{FFprobe: ffprobe}))
 	if err := verifier.Verify(context.Background(), path, publishing.PublishedAudio{Duration: duration, Bitrate: expectedBitrate, IsReencoded: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +169,7 @@ func TestFDKAACEncoder_Encode_Cancelled(t *testing.T) {
 }
 
 func TestFDKAACEncoder_Encode_LibraryMissing(t *testing.T) {
-	encoder := NewFDKAACEncoder(NewFFmpegDecoder(process.NewProcessRunner(), "ffmpeg", FFmpegCapabilities{}), filepath.Join(t.TempDir(), "FDK-AAC.dll"))
+	encoder := NewFDKAACEncoder(NewFFmpegDecoder(process.NewProcessRunner(), fixedTools{FFmpeg: "ffmpeg", Capabilities: FFmpegCapabilities{}}), filepath.Join(t.TempDir(), "FDK-AAC.dll"))
 
 	err := encoder.Encode(context.Background(), conversion.EncodeRequest{Destination: filepath.Join(t.TempDir(), "x.m4a")})
 

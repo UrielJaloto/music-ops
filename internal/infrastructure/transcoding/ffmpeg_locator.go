@@ -3,46 +3,41 @@ package transcoding
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"slices"
 
 	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
 )
 
 const (
-	ffmpegName        = "ffmpeg"
-	ffprobeName       = "ffprobe"
-	wingetPackageGlob = "Gyan.FFmpeg*"
+	ffmpegName  = "ffmpeg"
+	ffprobeName = "ffprobe"
 )
 
-func LocateFFmpeg(configured string, lookPath func(string) (string, error), localAppData string) (string, error) {
-	return locateExecutable(executableSearch{name: ffmpegName, configured: configured, lookPath: lookPath, localAppData: localAppData})
+func LocateFFmpeg(configured string, lookPath func(string) (string, error)) (string, error) {
+	return locateExecutable(ffmpegName, configured, lookPath)
 }
 
-func LocateFFprobe(configured string, lookPath func(string) (string, error), localAppData string) (string, error) {
-	return locateExecutable(executableSearch{name: ffprobeName, configured: configured, lookPath: lookPath, localAppData: localAppData})
+func LocateFFprobe(configured string, lookPath func(string) (string, error)) (string, error) {
+	return locateExecutable(ffprobeName, configured, lookPath)
 }
 
-type executableSearch struct {
-	name         string
-	configured   string
-	lookPath     func(string) (string, error)
-	localAppData string
-}
-
-func locateExecutable(search executableSearch) (string, error) {
-	if search.configured != "" {
-		return findExistingFile(search.configured, search.name)
+func LocateFDKLibrary(configured string) string {
+	if configured != "" {
+		return configured
 	}
-	if path, err := search.lookPath(search.name); err == nil {
+	return findFirstFile(listFDKLibraryCandidates())
+}
+
+func locateExecutable(name, configured string, lookPath func(string) (string, error)) (string, error) {
+	if configured != "" {
+		return findExistingFile(configured, name)
+	}
+	if path, err := lookPath(name); err == nil {
 		return path, nil
 	}
-	fileName := buildExecutableFileName(search.name)
-	linked := filepath.Join(search.localAppData, "Microsoft", "WinGet", "Links", fileName)
-	if isFile(linked) {
-		return linked, nil
+	if path := findFirstFile(listInstalledExecutables(buildExecutableFileName(name))); path != "" {
+		return path, nil
 	}
-	return newestPackagedExecutable(search.localAppData, fileName, search.name)
+	return "", fmt.Errorf("%w: %s", diagnostics.ErrFFmpegMissing, name)
 }
 
 func findExistingFile(path, name string) (string, error) {
@@ -52,30 +47,13 @@ func findExistingFile(path, name string) (string, error) {
 	return path, nil
 }
 
-func newestPackagedExecutable(localAppData, fileName, name string) (string, error) {
-	folders, err := filepath.Glob(filepath.Join(localAppData, "Microsoft", "WinGet", "Packages", wingetPackageGlob, "*", "bin"))
-	if err != nil {
-		return "", fmt.Errorf("searching winget packages: %w", err)
-	}
-	candidates := []string{}
-	for _, folder := range folders {
-		if candidate := filepath.Join(folder, fileName); isFile(candidate) {
-			candidates = append(candidates, candidate)
+func findFirstFile(candidates []string) string {
+	for _, candidate := range candidates {
+		if isFile(candidate) {
+			return candidate
 		}
 	}
-	if len(candidates) == 0 {
-		return "", fmt.Errorf("%w: %s", diagnostics.ErrFFmpegMissing, name)
-	}
-	return slices.MaxFunc(candidates, compareModTime), nil
-}
-
-func compareModTime(left, right string) int {
-	leftInfo, leftErr := os.Stat(left)
-	rightInfo, rightErr := os.Stat(right)
-	if leftErr != nil || rightErr != nil {
-		return 0
-	}
-	return leftInfo.ModTime().Compare(rightInfo.ModTime())
+	return ""
 }
 
 func buildExecutableFileName(name string) string {
@@ -85,12 +63,4 @@ func buildExecutableFileName(name string) string {
 func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
-}
-
-func FFmpegForDiagnostics(configured string, lookPath func(string) (string, error), localAppData string) string {
-	path, err := LocateFFmpeg(configured, lookPath, localAppData)
-	if err != nil {
-		return buildExecutableFileName(ffmpegName)
-	}
-	return path
 }

@@ -12,15 +12,6 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
 )
 
-type capabilityDetectorStub struct {
-	capabilities FFmpegCapabilities
-	err          error
-}
-
-func (stub capabilityDetectorStub) Detect(context.Context) (FFmpegCapabilities, error) {
-	return stub.capabilities, stub.err
-}
-
 type fdkAvailabilityStub struct{ err error }
 
 func (stub fdkAvailabilityStub) Available() error { return stub.err }
@@ -39,7 +30,7 @@ func TestEncoderProbe_ProbeEncoder(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			probe := NewEncoderProbe(capabilityDetectorStub{capabilities: testCase.capabilities}, fdkAvailabilityStub{err: testCase.fdkErr})
+			probe := NewEncoderProbe(fixedTools{Capabilities: testCase.capabilities}, fdkAvailabilityStub{err: testCase.fdkErr})
 
 			report, err := probe.ProbeEncoder(context.Background())
 
@@ -52,22 +43,12 @@ func TestEncoderProbe_ProbeEncoder(t *testing.T) {
 
 func TestEncoderProbe_FFmpegMissing(t *testing.T) {
 	errMissing := errors.New("ffmpeg missing")
-	probe := NewEncoderProbe(capabilityDetectorStub{err: errMissing}, fdkAvailabilityStub{})
+	probe := NewEncoderProbe(failingTools{err: errMissing}, fdkAvailabilityStub{})
 
 	report, err := probe.ProbeEncoder(context.Background())
 
 	if !errors.Is(err, errMissing) || report != (diagnostics.EncoderReport{HasFDK: true}) {
 		t.Fatalf("report = %+v err = %v", report, err)
-	}
-}
-
-func TestFFmpegCapabilityDetector_Detect(t *testing.T) {
-	runner := &scriptedRunner{outputs: map[string]string{"-version": "ffmpeg version 7.1 Copyright", "-hide_banner -buildconf": "--enable-libsoxr"}}
-
-	capabilities, err := NewFFmpegCapabilityDetector(runner, "ffmpeg").Detect(context.Background())
-
-	if err != nil || capabilities.Version != "7.1" || !capabilities.HasSoxr() {
-		t.Fatalf("capabilities = %+v err = %v", capabilities, err)
 	}
 }
 

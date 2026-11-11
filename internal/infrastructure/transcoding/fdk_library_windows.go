@@ -238,17 +238,21 @@ func (session *FDKSession) Close() {
 	session.handle = 0
 }
 
+type encodeBuffer struct {
+	pointer     unsafe.Pointer
+	identifier  int32
+	size        int32
+	elementSize int32
+	descriptor  aacBufferDescriptor
+}
+
+func (buffer *encodeBuffer) describe() {
+	buffer.descriptor = aacBufferDescriptor{numberOfBuffers: 1, buffers: &buffer.pointer, bufferIdentifiers: &buffer.identifier, bufferSizes: &buffer.size, elementSizes: &buffer.elementSize}
+}
+
 type encodeCall struct {
-	inputBuffer     unsafe.Pointer
-	outputBuffer    unsafe.Pointer
-	inputIdentifier int32
-	outputIdentity  int32
-	inputSize       int32
-	outputSize      int32
-	elementSize     int32
-	outputElement   int32
-	input           aacBufferDescriptor
-	output          aacBufferDescriptor
+	input           encodeBuffer
+	output          encodeBuffer
 	inputArguments  aacInputArguments
 	outputArguments aacOutputArguments
 	pcm             []int16
@@ -257,16 +261,15 @@ type encodeCall struct {
 
 func newEncodeCall(pcm []int16, bitstream []byte) *encodeCall {
 	call := &encodeCall{
-		inputIdentifier: aacBufferInAudioData, outputIdentity: aacBufferOutBitstreamData,
-		inputSize: clampInt32(len(pcm) * pcmSampleBytes), outputSize: clampInt32(len(bitstream)),
-		elementSize: pcmSampleBytes, outputElement: 1, pcm: pcm, bitstream: bitstream,
+		input:  encodeBuffer{identifier: aacBufferInAudioData, size: clampInt32(len(pcm) * pcmSampleBytes), elementSize: pcmSampleBytes},
+		output: encodeBuffer{identifier: aacBufferOutBitstreamData, size: clampInt32(len(bitstream)), elementSize: 1, pointer: unsafe.Pointer(&bitstream[0])},
+		pcm:    pcm, bitstream: bitstream,
 	}
 	if len(pcm) > 0 {
-		call.inputBuffer = unsafe.Pointer(&pcm[0])
+		call.input.pointer = unsafe.Pointer(&pcm[0])
 	}
-	call.outputBuffer = unsafe.Pointer(&bitstream[0])
-	call.input = aacBufferDescriptor{numberOfBuffers: 1, buffers: &call.inputBuffer, bufferIdentifiers: &call.inputIdentifier, bufferSizes: &call.inputSize, elementSizes: &call.elementSize}
-	call.output = aacBufferDescriptor{numberOfBuffers: 1, buffers: &call.outputBuffer, bufferIdentifiers: &call.outputIdentity, bufferSizes: &call.outputSize, elementSizes: &call.outputElement}
+	call.input.describe()
+	call.output.describe()
 	return call
 }
 
@@ -279,7 +282,7 @@ func (call *encodeCall) run(session *FDKSession) uintptr {
 		pinner.Pin(&call.pcm[0])
 	}
 	code, _, _ := session.library.encode.Call(session.handle,
-		uintptr(unsafe.Pointer(&call.input)), uintptr(unsafe.Pointer(&call.output)),
+		uintptr(unsafe.Pointer(&call.input.descriptor)), uintptr(unsafe.Pointer(&call.output.descriptor)),
 		uintptr(unsafe.Pointer(&call.inputArguments)), uintptr(unsafe.Pointer(&call.outputArguments)))
 	runtime.KeepAlive(call)
 	return code

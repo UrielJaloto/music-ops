@@ -93,7 +93,7 @@ func TestDiagnosticsService_Check(t *testing.T) {
 			doubles := healthyDiagnostics()
 			doubles.advisors.reports = append([]AdvisorReport{}, doubles.advisors.reports...)
 			testCase.arrange(&doubles)
-			service := NewDiagnosticsService(doubles.encoder, doubles.tags, doubles.advisors, doubles.output)
+			service := NewDiagnosticsService("1.0.0", doubles.encoder, doubles.tags, doubles.advisors, doubles.output)
 
 			output := service.Check(context.Background())
 
@@ -121,7 +121,7 @@ func assertOnlyFailing(t *testing.T, output DiagnosticsOutput, failing, fix stri
 func TestDiagnosticsService_Details(t *testing.T) {
 	doubles := healthyDiagnostics()
 	doubles.encoder.report.HasFDK = false
-	service := NewDiagnosticsService(doubles.encoder, doubles.tags, doubles.advisors, doubles.output)
+	service := NewDiagnosticsService("1.0.0", doubles.encoder, doubles.tags, doubles.advisors, doubles.output)
 
 	output := service.Check(context.Background())
 
@@ -137,3 +137,27 @@ func TestDiagnosticsService_Details(t *testing.T) {
 }
 
 var errTechnical = errors.New("technical failure")
+
+func TestDiagnosticsService_ReportVersion(t *testing.T) {
+	cases := []struct {
+		name     string
+		encoder  encoderProbeStub
+		expected VersionOutput
+	}{
+		{name: "FDK", encoder: encoderProbeStub{report: EncoderReport{FFmpegVersion: "9.0.2", HasFDK: true}}, expected: VersionOutput{Version: "1.0.0", FFmpegVersion: "9.0.2", IsFFmpegFound: true, Engine: EngineFDK, BitrateKbps: 256}},
+		{name: "Native", encoder: encoderProbeStub{report: EncoderReport{FFmpegVersion: "9.0.2"}}, expected: VersionOutput{Version: "1.0.0", FFmpegVersion: "9.0.2", IsFFmpegFound: true, Engine: EngineNative, BitrateKbps: 512}},
+		{name: "NoFFmpeg", encoder: encoderProbeStub{err: errTechnical}, expected: VersionOutput{Version: "1.0.0"}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			doubles := healthyDiagnostics()
+			service := NewDiagnosticsService("1.0.0", testCase.encoder, doubles.tags, doubles.advisors, doubles.output)
+
+			output := service.ReportVersion(context.Background())
+
+			if output != testCase.expected {
+				t.Fatalf("output = %+v", output)
+			}
+		})
+	}
+}

@@ -24,6 +24,36 @@ type fakeLastFM struct {
 	artistTags map[string][]string
 	isFailing  bool
 	calls      atomic.Int64
+	gate       *requestGate
+}
+
+type requestGate struct {
+	once    sync.Once
+	reached chan struct{}
+}
+
+func (fake *fakeLastFM) blockFirstRequest() <-chan struct{} {
+	fake.mutex.Lock()
+	defer fake.mutex.Unlock()
+	fake.gate = &requestGate{reached: make(chan struct{})}
+	return fake.gate.reached
+}
+
+func (fake *fakeLastFM) waitAtGate(request *http.Request) {
+	fake.mutex.Lock()
+	gate := fake.gate
+	fake.mutex.Unlock()
+	if gate == nil {
+		return
+	}
+	isFirst := false
+	gate.once.Do(func() {
+		isFirst = true
+		close(gate.reached)
+	})
+	if isFirst {
+		<-request.Context().Done()
+	}
 }
 
 func newFakeLastFM(t *testing.T) *fakeLastFM {
@@ -48,6 +78,7 @@ func (fake *fakeLastFM) setArtistTags(artist string, tags ...string) {
 
 func (fake *fakeLastFM) handle(writer http.ResponseWriter, request *http.Request) {
 	fake.calls.Add(1)
+	fake.waitAtGate(request)
 	fake.mutex.Lock()
 	defer fake.mutex.Unlock()
 	if fake.isFailing {

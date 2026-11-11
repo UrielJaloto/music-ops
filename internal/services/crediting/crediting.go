@@ -76,12 +76,17 @@ func (service CreditService) Normalize(ctx context.Context, input NormalizeCredi
 			return NormalizedCredits{}, err
 		}
 		batch := input.Tracks[start:min(start+service.batchSize, len(input.Tracks))]
-		suggestions, err := service.advisor.SuggestCredits(ctx, toCreditRequests(batch))
-		for _, track := range batch {
-			normalized = applyCredit(normalized, track, chooseCredit(track, suggestions, err))
-		}
+		normalized = service.normalizeBatch(ctx, batch, normalized)
 	}
 	return normalized, nil
+}
+
+func (service CreditService) normalizeBatch(ctx context.Context, batch []CreditTrack, normalized NormalizedCredits) NormalizedCredits {
+	suggestions, err := service.advisor.SuggestCredits(ctx, toCreditRequests(batch))
+	for _, track := range batch {
+		normalized = applyCredit(normalized, track, chooseCredit(track, suggestions, err))
+	}
+	return normalized
 }
 
 func IsValidBatchSize(size int) bool {

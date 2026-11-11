@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 )
 
 var (
@@ -22,7 +24,7 @@ const (
 	CheckFreeSpace            = "free space"
 	advisorCheckPrefix        = "advisor "
 	fixFFmpeg                 = "winget install -e --id Gyan.FFmpeg"
-	fixFDK                    = "install fre:ac or run: music-ops config set encoder.fdk_library <path to FDK-AAC.dll>"
+	fixFDK                    = "install an FDK-AAC library (fre:ac ships one) or run: music-ops config set encoder.fdk_library <path to the library>"
 	fixLastFM                 = "music-ops config set lastfm.api_key <key>"
 	fixAdvisor                = "music-ops advisor install"
 	fixOutput                 = "music-ops config set output.dir <path>"
@@ -31,6 +33,9 @@ const (
 	detailSoxrMissing         = "ffmpeg has no soxr resampler; the default resampler is used"
 	detailNotWritable         = "output folder is not writable"
 	bytesPerMebibyte          = 1 << 20
+	bitsPerKilobit            = 1000
+	EngineFDK                 = "FDK-AAC"
+	EngineNative              = "ffmpeg aac"
 )
 
 type EncoderReport struct {
@@ -80,15 +85,24 @@ type DiagnosticsOutput struct {
 	IsHealthy bool
 }
 
+type VersionOutput struct {
+	Version       string
+	FFmpegVersion string
+	IsFFmpegFound bool
+	Engine        string
+	BitrateKbps   int
+}
+
 type DiagnosticsService struct {
+	version  string
 	encoder  EncoderProbe
 	tags     TagSourceProbe
 	advisors AdvisorProbe
 	output   OutputProbe
 }
 
-func NewDiagnosticsService(encoder EncoderProbe, tags TagSourceProbe, advisors AdvisorProbe, output OutputProbe) DiagnosticsService {
-	return DiagnosticsService{encoder: encoder, tags: tags, advisors: advisors, output: output}
+func NewDiagnosticsService(version string, encoder EncoderProbe, tags TagSourceProbe, advisors AdvisorProbe, output OutputProbe) DiagnosticsService {
+	return DiagnosticsService{version: version, encoder: encoder, tags: tags, advisors: advisors, output: output}
 }
 
 func (service DiagnosticsService) Check(ctx context.Context) DiagnosticsOutput {
@@ -99,6 +113,21 @@ func (service DiagnosticsService) Check(ctx context.Context) DiagnosticsOutput {
 	return DiagnosticsOutput{Checks: checks, IsHealthy: areFatalChecksOK(checks)}
 }
 
+func (service DiagnosticsService) ReportVersion(ctx context.Context) VersionOutput {
+	report, err := service.encoder.ProbeEncoder(ctx)
+	if err != nil {
+		return VersionOutput{Version: service.version}
+	}
+	engine, name := audio.EngineNative, EngineNative
+	if report.HasFDK {
+		engine, name = audio.EngineFDK, EngineFDK
+	}
+	return VersionOutput{
+		Version: service.version, FFmpegVersion: report.FFmpegVersion, IsFFmpegFound: true,
+		Engine: name, BitrateKbps: audio.NewEncodingProfile(engine).Bitrate() / bitsPerKilobit,
+	}
+}
+
 func (service DiagnosticsService) checkEncoder(ctx context.Context) []CheckResult {
 	report, err := service.encoder.ProbeEncoder(ctx)
 	ffmpeg := CheckResult{Name: CheckFFmpeg, IsOK: err == nil, IsFatal: true, Detail: report.FFmpegVersion, Fix: fixFFmpeg}
@@ -107,16 +136,16 @@ func (service DiagnosticsService) checkEncoder(ctx context.Context) []CheckResul
 	}
 	return []CheckResult{
 		ffmpeg,
-		buildOptionalCheck(CheckFDK, report.HasFDK, detailFDKFallback, fixFDK),
-		buildOptionalCheck(CheckSoxr, report.HasSoxr, detailSoxrMissing, fixFFmpeg),
+		buildOptionalCheck(report.HasFDK, CheckResult{Name: CheckFDK, Detail: detailFDKFallback, Fix: fixFDK}),
+		buildOptionalCheck(report.HasSoxr, CheckResult{Name: CheckSoxr, Detail: detailSoxrMissing, Fix: fixFFmpeg}),
 	}
 }
 
-func buildOptionalCheck(name string, isOK bool, missingDetail, fix string) CheckResult {
+func buildOptionalCheck(isOK bool, missing CheckResult) CheckResult {
 	if isOK {
-		return CheckResult{Name: name, IsOK: true}
+		return CheckResult{Name: missing.Name, IsOK: true}
 	}
-	return CheckResult{Name: name, Detail: missingDetail, Fix: fix}
+	return missing
 }
 
 func (service DiagnosticsService) checkTagSource(ctx context.Context) CheckResult {

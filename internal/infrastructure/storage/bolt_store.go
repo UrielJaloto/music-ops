@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
@@ -18,30 +19,59 @@ const (
 )
 
 type BoltStore struct {
+	path     string
+	mutex    sync.RWMutex
 	database *bolt.DB
 }
 
-func OpenBoltStore(path string) (*BoltStore, error) {
-	database, err := bolt.Open(path, boltFilePermission, &bolt.Options{Timeout: boltLockTimeout})
+func NewBoltStore(path string) *BoltStore {
+	return &BoltStore{path: path}
+}
+
+func (store *BoltStore) Open() error {
+	database, err := bolt.Open(store.path, boltFilePermission, &bolt.Options{Timeout: boltLockTimeout})
 	if errors.Is(err, boltErrors.ErrTimeout) {
-		return nil, fmt.Errorf("%w: %s", importing.ErrRunInProgress, path)
+		return fmt.Errorf("%w: %s", importing.ErrRunInProgress, store.path)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("opening store %s: %w", path, err)
+		return fmt.Errorf("opening store %s: %w", store.path, err)
 	}
-	return &BoltStore{database: database}, nil
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	store.database = database
+	return nil
 }
 
 func (store *BoltStore) Close() error {
-	return store.database.Close()
+	store.mutex.Lock()
+	defer store.mutex.Unlock()
+	if store.database == nil {
+		return nil
+	}
+	err := store.database.Close()
+	store.database = nil
+	return err
+}
+
+func (store *BoltStore) openDatabase(ctx context.Context) (*bolt.DB, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	store.mutex.RLock()
+	defer store.mutex.RUnlock()
+	if store.database == nil {
+		return nil, importing.ErrWorkspaceClosed
+	}
+	return store.database, nil
 }
 
 func (store *BoltStore) read(ctx context.Context, bucket, key string) ([]byte, bool, error) {
-	if err := ctx.Err(); err != nil {
+	database, err := store.openDatabase(ctx)
+	if err != nil {
 		return nil, false, err
 	}
 	var value []byte
-	err := store.database.View(func(transaction *bolt.Tx) error {
+	err = database.View(func(transaction *bolt.Tx) error {
 		existing := transaction.Bucket([]byte(bucket))
 		if existing == nil {
 			return nil
@@ -58,10 +88,11 @@ func (store *BoltStore) read(ctx context.Context, bucket, key string) ([]byte, b
 }
 
 func (store *BoltStore) write(ctx context.Context, bucket, key string, value []byte) error {
-	if err := ctx.Err(); err != nil {
+	database, err := store.openDatabase(ctx)
+	if err != nil {
 		return err
 	}
-	err := store.database.Update(func(transaction *bolt.Tx) error {
+	err = database.Update(func(transaction *bolt.Tx) error {
 		existing, err := transaction.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
 			return err
@@ -75,10 +106,11 @@ func (store *BoltStore) write(ctx context.Context, bucket, key string, value []b
 }
 
 func (store *BoltStore) delete(ctx context.Context, bucket, key string) error {
-	if err := ctx.Err(); err != nil {
+	database, err := store.openDatabase(ctx)
+	if err != nil {
 		return err
 	}
-	err := store.database.Update(func(transaction *bolt.Tx) error {
+	err = database.Update(func(transaction *bolt.Tx) error {
 		existing := transaction.Bucket([]byte(bucket))
 		if existing == nil {
 			return nil
@@ -96,12 +128,13 @@ type CacheClock interface {
 }
 
 type BoltCache struct {
-	store *BoltStore
-	clock CacheClock
+	store  *BoltStore
+	clock  CacheClock
+	bucket string
 }
 
-func NewBoltCache(store *BoltStore, clock CacheClock) BoltCache {
-	return BoltCache{store: store, clock: clock}
+func NewBoltCache(store *BoltStore, clock CacheClock, bucket string) BoltCache {
+	return BoltCache{store: store, clock: clock, bucket: bucket}
 }
 
 type cacheEnvelope struct {
@@ -109,7 +142,8 @@ type cacheEnvelope struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func (cache BoltCache) Get(ctx context.Context, bucket, key string) ([]byte, bool, error) {
+func (cache BoltCache) Get(ctx context.Context, key string) ([]byte, bool, error) {
+	bucket := cache.bucket
 	stored, isFound, err := cache.store.read(ctx, bucket, key)
 	if err != nil || !isFound {
 		return nil, false, err
@@ -124,9 +158,9 @@ func (cache BoltCache) Get(ctx context.Context, bucket, key string) ([]byte, boo
 	return envelope.Value, true, nil
 }
 
-func (cache BoltCache) Put(ctx context.Context, bucket, key string, value []byte, ttl time.Duration) error {
+func (cache BoltCache) Put(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	encoded, _ := json.Marshal(cacheEnvelope{Value: value, ExpiresAt: cache.clock.Now().Add(ttl)})
-	return cache.store.write(ctx, bucket, key, encoded)
+	return cache.store.write(ctx, cache.bucket, key, encoded)
 }
 
 const stagingFilePermission = 0o600

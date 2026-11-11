@@ -23,12 +23,18 @@ func (sequentialPool) Run(ctx context.Context, size int, task func(ctx context.C
 }
 
 type finderStub struct {
-	found FoundFiles
-	err   error
+	found     FoundFiles
+	err       error
+	isInside  bool
+	insideErr error
 }
 
 func (stub finderStub) FindAudioFiles(context.Context, string) (FoundFiles, error) {
 	return stub.found, stub.err
+}
+
+func (stub finderStub) IsInside(string, string) (bool, error) {
+	return stub.isInside, stub.insideErr
 }
 
 type inspectorStub struct {
@@ -70,14 +76,17 @@ func TestSourceService_Discover(t *testing.T) {
 		expectedError  error
 	}{
 		{
-			name: "WithAudioFiles_ReturnsTracksInPathOrder", input: DiscoverInput{Folder: "in"}, finder: finderStub{found: files},
+			name: "WithAudioFiles_ReturnsTracksInPathOrder", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: files},
 			inspector:     inspectorStub{results: map[string]InspectedAudio{"in/a.flac": validInspection(), "in/b.flac": validInspection()}},
 			expectedPaths: []string{"a.flac", "b.flac"}, expectedFailed: []SourceFailure{},
 		},
-		{name: "WithEmptyFolder_ReturnsErrFolderMissing", input: DiscoverInput{Folder: " "}, expectedError: ErrFolderMissing},
-		{name: "WhenFinderFails_ReturnsWrappedError", input: DiscoverInput{Folder: "in"}, finder: finderStub{err: errTechnical}, expectedError: errTechnical},
+		{name: "WithEmptyFolder_ReturnsErrFolderMissing", input: DiscoverInput{Folder: " ", Output: "out"}, expectedError: ErrFolderMissing},
+		{name: "WithEmptyOutput_ReturnsErrFolderMissing", input: DiscoverInput{Folder: "in", Output: " "}, expectedError: ErrFolderMissing},
+		{name: "OutputInsideInput_ReturnsErrOutputInsideInput", input: DiscoverInput{Folder: "in", Output: "in/out"}, finder: finderStub{found: files, isInside: true}, expectedError: ErrOutputInsideInput},
+		{name: "WhenFolderComparisonFails_ReturnsWrappedError", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{insideErr: errTechnical}, expectedError: errTechnical},
+		{name: "WhenFinderFails_ReturnsWrappedError", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{err: errTechnical}, expectedError: errTechnical},
 		{
-			name: "WhenInspectionFails_RecordsFailureAndContinues", input: DiscoverInput{Folder: "in"}, finder: finderStub{found: files},
+			name: "WhenInspectionFails_RecordsFailureAndContinues", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: files},
 			inspector: inspectorStub{
 				results: map[string]InspectedAudio{"in/a.flac": validInspection()},
 				errors:  map[string]error{"in/b.flac": errTechnical},
@@ -85,17 +94,22 @@ func TestSourceService_Discover(t *testing.T) {
 			expectedPaths: []string{"a.flac"}, expectedFailed: []SourceFailure{{Path: "in/b.flac", Reason: "technical failure"}},
 		},
 		{
-			name: "WhenQualityInvalid_RecordsFailure", input: DiscoverInput{Folder: "in"}, finder: finderStub{found: FoundFiles{Audio: []FoundFile{foundFile("a.flac")}}},
+			name: "WhenQualityInvalid_RecordsFailure", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: FoundFiles{Audio: []FoundFile{foundFile("a.flac")}}},
 			inspector:     inspectorStub{results: map[string]InspectedAudio{"in/a.flac": invalidQuality}},
 			expectedPaths: []string{}, expectedFailed: []SourceFailure{{Path: "in/a.flac", Reason: audio.ErrSampleRateOutOfRange.Error()}},
 		},
 		{
-			name: "WhenCodecMissing_RecordsFailure", input: DiscoverInput{Folder: "in"}, finder: finderStub{found: FoundFiles{Audio: []FoundFile{foundFile("a.flac")}}},
+			name: "WhenCodecMissing_RecordsFailure", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: FoundFiles{Audio: []FoundFile{foundFile("a.flac")}}},
 			inspector:     inspectorStub{results: map[string]InspectedAudio{"in/a.flac": {}}},
 			expectedPaths: []string{}, expectedFailed: []SourceFailure{{Path: "in/a.flac", Reason: audio.ErrCodecMissing.Error()}},
 		},
 		{
-			name: "CancelledContext_StopsAndReturnsContextError", input: DiscoverInput{Folder: "in"}, finder: finderStub{found: files},
+			name: "InspectorUnavailable_StopsTheRun", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: files},
+			inspector:     inspectorStub{errors: map[string]error{"in/a.flac": ErrInspectorUnavailable}},
+			expectedError: ErrInspectorUnavailable,
+		},
+		{
+			name: "CancelledContext_StopsAndReturnsContextError", input: DiscoverInput{Folder: "in", Output: "out"}, finder: finderStub{found: files},
 			ctx:           cancelledContext,
 			expectedError: context.Canceled,
 		},
@@ -108,6 +122,9 @@ func TestSourceService_Discover(t *testing.T) {
 				ctx = testCase.ctx()
 			}
 
+			progress := &progressSpy{}
+			testCase.input.Progress = progress
+
 			discovered, err := service.Discover(ctx, testCase.input)
 
 			if !errors.Is(err, testCase.expectedError) {
@@ -117,6 +134,10 @@ func TestSourceService_Discover(t *testing.T) {
 				return
 			}
 			assertDiscovered(t, discovered, testCase.expectedPaths, testCase.expectedFailed)
+			inspected := len(testCase.expectedPaths) + len(testCase.expectedFailed)
+			if progress.total != inspected || len(progress.finished) != inspected || progress.failed != len(testCase.expectedFailed) {
+				t.Fatalf("progress = %+v", progress)
+			}
 		})
 	}
 }
@@ -137,7 +158,7 @@ func TestSourceService_Discover_MapsSourceDetails(t *testing.T) {
 	service := NewSourceService(finderStub{found: FoundFiles{Audio: []FoundFile{file}, Ignored: []string{"in/cover.jpg"}}},
 		inspectorStub{results: map[string]InspectedAudio{"in/a.flac": validInspection()}}, sequentialPool{})
 
-	discovered, err := service.Discover(context.Background(), DiscoverInput{Folder: "in"})
+	discovered, err := service.Discover(context.Background(), DiscoverInput{Folder: "in", Output: "out", Progress: &progressSpy{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,4 +178,21 @@ func cancelledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
+}
+
+type progressSpy struct {
+	total    int
+	finished []string
+	failed   int
+}
+
+func (spy *progressSpy) Counted(total int) {
+	spy.total = total
+}
+
+func (spy *progressSpy) Finished(path string, isFailed bool) {
+	spy.finished = append(spy.finished, path)
+	if isFailed {
+		spy.failed++
+	}
 }

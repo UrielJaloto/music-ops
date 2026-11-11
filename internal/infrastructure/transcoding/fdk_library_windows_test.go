@@ -5,13 +5,10 @@ package transcoding
 import (
 	"errors"
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
 	"unsafe"
 )
-
-const defaultFDKLibraryPath = `C:\Program Files\freac\codecs\FDK-AAC.dll`
 
 func TestFDKStructLayouts_MatchHeader(t *testing.T) {
 	cases := []struct {
@@ -58,39 +55,6 @@ func TestFDKError_Error(t *testing.T) {
 	if message != "aacEncEncode failed with FDK-AAC error 0x23" {
 		t.Fatalf("message = %q", message)
 	}
-}
-
-func requireFDKLibrary(t *testing.T) FDKLibrary {
-	t.Helper()
-	path, isSet := os.LookupEnv("MUSIC_OPS_ENCODER_FDK_LIBRARY")
-	if !isSet || path == "" {
-		path = defaultFDKLibraryPath
-	}
-	library, err := LoadFDKLibrary(path)
-	if err == nil {
-		return library
-	}
-	if strict, _ := os.LookupEnv("MUSIC_OPS_STRICT"); strict == "1" {
-		t.Fatalf("FDK-AAC library is required: %v", err)
-	}
-	t.Skipf("FDK-AAC library is not installed: %v", err)
-	return FDKLibrary{}
-}
-
-func stereoSettings() FDKSettings {
-	return FDKSettings{SampleRate: 44100, Channels: 2, Bitrate: 256000, Bandwidth: 20000}
-}
-
-func sinePCM(seconds float64, channels int) []int16 {
-	frames := int(seconds * 44100)
-	pcm := make([]int16, 0, frames*channels)
-	for index := range frames {
-		value := int16(8000 * math.Sin(2*math.Pi*440*float64(index)/44100))
-		for range channels {
-			pcm = append(pcm, value)
-		}
-	}
-	return pcm
 }
 
 func TestFDKSession_EncodeStereoSine(t *testing.T) {

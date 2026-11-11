@@ -4,16 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
 )
 
-type VersionReport struct {
-	Version       string
-	FFmpegVersion string
-	Engine        string
-}
+const ffmpegNotFound = "ffmpeg not found"
 
 type VersionReporter interface {
-	Report(ctx context.Context) VersionReport
+	ReportVersion(ctx context.Context) diagnostics.VersionOutput
 }
 
 type VersionController struct {
@@ -26,10 +24,15 @@ func NewVersionController(reporter VersionReporter, output io.Writer) VersionCon
 }
 
 func (controller VersionController) Execute(ctx context.Context, _ []string) int {
-	report := controller.reporter.Report(ctx)
-	text := fmt.Sprintf("music-ops %s\nffmpeg %s\nencoder %s\n", report.Version, report.FFmpegVersion, report.Engine)
-	if _, err := io.WriteString(controller.output, text); err != nil {
+	if _, err := io.WriteString(controller.output, formatVersion(controller.reporter.ReportVersion(ctx))); err != nil {
 		return exitFailure
 	}
 	return exitSuccess
+}
+
+func formatVersion(version diagnostics.VersionOutput) string {
+	if !version.IsFFmpegFound {
+		return fmt.Sprintf("music-ops %s\n%s\n", version.Version, ffmpegNotFound)
+	}
+	return fmt.Sprintf("music-ops %s\nffmpeg %s\nencoder %s %d kb/s\n", version.Version, version.FFmpegVersion, version.Engine, version.BitrateKbps)
 }

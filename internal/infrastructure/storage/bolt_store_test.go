@@ -34,9 +34,14 @@ func (clock *movableClock) advance(duration time.Duration) {
 	clock.now = clock.now.Add(duration)
 }
 
+func openedStore(path string) (*BoltStore, error) {
+	store := NewBoltStore(path)
+	return store, store.Open()
+}
+
 func openTestStore(t *testing.T, path string) *BoltStore {
 	t.Helper()
-	store, err := OpenBoltStore(path)
+	store, err := openedStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +51,14 @@ func openTestStore(t *testing.T, path string) *BoltStore {
 
 func TestBoltCache_GetPut(t *testing.T) {
 	clock := &movableClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	cache := NewBoltCache(openTestStore(t, filepath.Join(t.TempDir(), "state.db")), clock)
+	cache := NewBoltCache(openTestStore(t, filepath.Join(t.TempDir(), "state.db")), clock, "lastfm")
 	ctx := context.Background()
 
-	_, isMissHit, missErr := cache.Get(ctx, "lastfm", "song")
-	putErr := cache.Put(ctx, "lastfm", "song", []byte("rock"), time.Hour)
-	value, isHit, hitErr := cache.Get(ctx, "lastfm", "song")
-	overwriteErr := cache.Put(ctx, "lastfm", "song", []byte("pop"), time.Hour)
-	overwritten, _, _ := cache.Get(ctx, "lastfm", "song")
+	_, isMissHit, missErr := cache.Get(ctx, "song")
+	putErr := cache.Put(ctx, "song", []byte("rock"), time.Hour)
+	value, isHit, hitErr := cache.Get(ctx, "song")
+	overwriteErr := cache.Put(ctx, "song", []byte("pop"), time.Hour)
+	overwritten, _, _ := cache.Get(ctx, "song")
 
 	if isMissHit || missErr != nil || putErr != nil || overwriteErr != nil {
 		t.Fatalf("miss = %v errors = %v %v %v", isMissHit, missErr, putErr, overwriteErr)
@@ -78,15 +83,15 @@ func TestBoltCache_Expiry(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			clock := &movableClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 			store := openTestStore(t, filepath.Join(t.TempDir(), "state.db"))
-			cache := NewBoltCache(store, clock)
-			if err := cache.Put(context.Background(), "advisor", "k", []byte("v"), time.Hour); err != nil {
+			cache := NewBoltCache(store, clock, "lastfm")
+			if err := cache.Put(context.Background(), "k", []byte("v"), time.Hour); err != nil {
 				t.Fatal(err)
 			}
 			clock.advance(testCase.elapsed)
 
-			_, isHit, err := cache.Get(context.Background(), "advisor", "k")
+			_, isHit, err := cache.Get(context.Background(), "k")
 
-			_, isStored, _ := store.read(context.Background(), "advisor", "k")
+			_, isStored, _ := store.read(context.Background(), "lastfm", "k")
 			if err != nil || isHit != testCase.isHit || isStored == testCase.isDeleted {
 				t.Fatalf("hit = %v stored = %v err = %v", isHit, isStored, err)
 			}
@@ -96,13 +101,13 @@ func TestBoltCache_Expiry(t *testing.T) {
 
 func TestBoltCache_ConcurrentWriters(t *testing.T) {
 	clock := &movableClock{now: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	cache := NewBoltCache(openTestStore(t, filepath.Join(t.TempDir(), "state.db")), clock)
+	cache := NewBoltCache(openTestStore(t, filepath.Join(t.TempDir(), "state.db")), clock, "lastfm")
 	var group sync.WaitGroup
 	errs := make(chan error, 50)
 
 	for index := range 50 {
 		group.Go(func() {
-			errs <- cache.Put(context.Background(), "lastfm", strconv.Itoa(index), []byte(strconv.Itoa(index)), time.Hour)
+			errs <- cache.Put(context.Background(), strconv.Itoa(index), []byte(strconv.Itoa(index)), time.Hour)
 		})
 	}
 	group.Wait()
@@ -114,7 +119,7 @@ func TestBoltCache_ConcurrentWriters(t *testing.T) {
 		}
 	}
 	for index := range 50 {
-		value, isHit, err := cache.Get(context.Background(), "lastfm", strconv.Itoa(index))
+		value, isHit, err := cache.Get(context.Background(), strconv.Itoa(index))
 		if err != nil || !isHit || string(value) != strconv.Itoa(index) {
 			t.Fatalf("key %d value = %q hit = %v err = %v", index, value, isHit, err)
 		}
@@ -127,7 +132,7 @@ func TestBoltCache_CorruptEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, isHit, err := NewBoltCache(store, &movableClock{}).Get(context.Background(), "lastfm", "bad")
+	_, isHit, err := NewBoltCache(store, &movableClock{}, "lastfm").Get(context.Background(), "bad")
 
 	if err == nil || isHit {
 		t.Fatalf("hit = %v err = %v", isHit, err)
@@ -152,7 +157,7 @@ func TestOpenBoltStore_SecondOpenWhileLocked_ReturnsErrRunInProgress(t *testing.
 	path := filepath.Join(t.TempDir(), "state.db")
 	openTestStore(t, path)
 
-	_, err := OpenBoltStore(path)
+	_, err := openedStore(path)
 
 	if !errors.Is(err, importing.ErrRunInProgress) {
 		t.Fatalf("err = %v", err)
@@ -160,7 +165,7 @@ func TestOpenBoltStore_SecondOpenWhileLocked_ReturnsErrRunInProgress(t *testing.
 }
 
 func TestOpenBoltStore_MissingFolder(t *testing.T) {
-	_, err := OpenBoltStore(filepath.Join(t.TempDir(), "missing", "state.db"))
+	_, err := openedStore(filepath.Join(t.TempDir(), "missing", "state.db"))
 
 	if err == nil || errors.Is(err, importing.ErrRunInProgress) {
 		t.Fatalf("err = %v", err)
@@ -169,7 +174,7 @@ func TestOpenBoltStore_MissingFolder(t *testing.T) {
 
 func TestJournalRepository_RoundTrips(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
-	store, err := OpenBoltStore(path)
+	store, err := openedStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +261,7 @@ func writeTestFile(t *testing.T, path, content string) {
 }
 
 func TestBoltStore_ClosedDatabase(t *testing.T) {
-	store, err := OpenBoltStore(filepath.Join(t.TempDir(), "state.db"))
+	store, err := openedStore(filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,5 +300,23 @@ func TestReportStorage_Create_ReportIsAFolder(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "creating report report.md") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBoltStore_DatabaseClosedUnderneath_WrapsTheDriverError(t *testing.T) {
+	store := openTestStore(t, filepath.Join(t.TempDir(), "state.db"))
+	if err := store.database.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	_, _, readErr := store.read(ctx, "bucket", "key")
+	writeErr := store.write(ctx, "bucket", "key", []byte("x"))
+	deleteErr := store.delete(ctx, "bucket", "key")
+
+	for prefix, err := range map[string]error{"reading bucket/key": readErr, "writing bucket/key": writeErr, "deleting bucket/key": deleteErr} {
+		if err == nil || !strings.HasPrefix(err.Error(), prefix+": ") {
+			t.Fatalf("%s err = %v", prefix, err)
+		}
 	}
 }

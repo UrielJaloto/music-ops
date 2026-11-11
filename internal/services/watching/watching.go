@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +15,6 @@ import (
 const (
 	ProcessedFolderName = "_processed"
 	FailedFolderName    = "_failed"
-	watchPathSeparator  = "/"
 )
 
 type FolderWatcher interface {
@@ -80,17 +79,22 @@ func (service WatchService) Watch(ctx context.Context, input WatchInput) error {
 
 func (service WatchService) importArrivals(ctx context.Context, input WatchInput, arrivals <-chan string) error {
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case folder, isOpen := <-arrivals:
-			if !isOpen {
-				return nil
-			}
-			if err := service.importArrivedFolder(ctx, input, folder); err != nil {
-				return err
-			}
+		isDone, err := service.importNextArrival(ctx, input, arrivals)
+		if isDone || err != nil {
+			return err
 		}
+	}
+}
+
+func (service WatchService) importNextArrival(ctx context.Context, input WatchInput, arrivals <-chan string) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return true, ctx.Err()
+	case folder, isOpen := <-arrivals:
+		if !isOpen {
+			return true, nil
+		}
+		return false, service.importArrivedFolder(ctx, input, folder)
 	}
 }
 
@@ -118,7 +122,7 @@ func (service WatchService) importArrivedFolder(ctx context.Context, input Watch
 		service.progress.FolderImported(folder, output.ExitStatus)
 		category = categorize(output.ExitStatus)
 	}
-	service.archive(ctx, folder, strings.TrimRight(input.Inbox, "/\\")+watchPathSeparator+category)
+	service.archive(ctx, folder, filepath.Join(input.Inbox, category))
 	return nil
 }
 
@@ -151,7 +155,7 @@ func categorize(exitStatus int) string {
 }
 
 func isArchiveFolder(folder string) bool {
-	name := path.Base(strings.ReplaceAll(folder, "\\", watchPathSeparator))
+	name := filepath.Base(filepath.Clean(folder))
 	return name == ProcessedFolderName || name == FailedFolderName
 }
 

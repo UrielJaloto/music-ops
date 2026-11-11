@@ -31,6 +31,7 @@ const (
 	lastFMResponseLimit     = 1 << 20
 	lastFMRequestsPerSecond = 4
 	userAgentPrefix         = "music-ops/"
+	HTTPTimeout             = 30 * time.Second
 )
 
 var (
@@ -100,10 +101,8 @@ func (client LastFMClient) fetchTopTags(ctx context.Context, query url.Values, a
 func (client LastFMClient) fetchWithRetries(ctx context.Context, address string) (lastFMResponse, error) {
 	var lastErr error
 	for attempt := range lastFMMaximumAttempts {
-		if attempt > 0 {
-			if err := client.backoff.Wait(ctx, attempt-1); err != nil {
-				return lastFMResponse{}, err
-			}
+		if err := client.waitBefore(ctx, attempt); err != nil {
+			return lastFMResponse{}, err
 		}
 		response, err := client.fetchOnce(ctx, address)
 		if !errors.Is(err, errLastFMRetryable) {
@@ -112,6 +111,13 @@ func (client LastFMClient) fetchWithRetries(ctx context.Context, address string)
 		lastErr = err
 	}
 	return lastFMResponse{}, fmt.Errorf("last.fm retries exhausted: %w", lastErr)
+}
+
+func (client LastFMClient) waitBefore(ctx context.Context, attempt int) error {
+	if attempt == 0 {
+		return nil
+	}
+	return client.backoff.Wait(ctx, attempt-1)
 }
 
 func (client LastFMClient) fetchOnce(ctx context.Context, address string) (lastFMResponse, error) {

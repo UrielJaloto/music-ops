@@ -36,7 +36,7 @@ func NewFDKAACEncoder(decoder PCMDecoder, libraryPath string) FDKAACEncoder {
 
 func (encoder FDKAACEncoder) Available() error {
 	encoder.state.once.Do(func() {
-		encoder.state.library, encoder.state.err = LoadFDKLibrary(encoder.libraryPath)
+		encoder.state.library, encoder.state.err = LoadFDKLibrary(LocateFDKLibrary(encoder.libraryPath))
 	})
 	return encoder.state.err
 }

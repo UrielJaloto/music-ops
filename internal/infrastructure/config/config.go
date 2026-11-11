@@ -3,11 +3,11 @@ package config
 import (
 	"bytes"
 	"context"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,17 +16,12 @@ import (
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
-	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/services/settings"
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed config_default.yaml
-var defaultConfigYAML []byte
-
 const (
-	configFolderName     = "music-ops"
 	configFileName       = "config.yaml"
 	environmentPrefix    = "MUSIC_OPS_"
 	keySeparator         = "."
@@ -42,11 +37,24 @@ const (
 	maximumPort          = 65535
 	minimumBatch         = 1
 	maximumBatch         = 200
-	appDataVariable      = "APPDATA"
-	userProfileVariable  = "USERPROFILE"
-	defaultMusicFolder   = "Music"
-	localAppDataVariable = "LOCALAPPDATA"
+	applicationFolder    = "music-ops"
+	musicFolder          = "Music"
+	defaultAlbumTemplate = "{albumartist} - {album}"
+	defaultLastFMURL     = "https://ws.audioscrobbler.com/2.0/"
+	defaultAdvisorPort   = "8089"
+	defaultBatchSize     = "40"
+	defaultWorkers       = "0"
+	defaultWatchSettle   = "20s"
 )
+
+var defaultValues = map[string]string{
+	"output.dir": "", "output.layout": layoutFlat, "output.album_template": defaultAlbumTemplate,
+	"encoder.fdk_library": "", "encoder.ffmpeg": "", "encoder.ffprobe": "", "encoder.workers": defaultWorkers,
+	"lastfm.api_key": "", "lastfm.base_url": defaultLastFMURL,
+	"advisor.llama_server": "", "advisor.model_file": "", "advisor.port": defaultAdvisorPort, "advisor.batch_size": defaultBatchSize,
+	"numbering.mode": numberingPerDir,
+	"watch.inbox":    "", "watch.settle": defaultWatchSettle,
+}
 
 var configKeys = []string{
 	"output.dir", "output.layout", "output.album_template",
@@ -105,13 +113,6 @@ type Config struct {
 	Watch         WatchConfig
 }
 
-func (config Config) EncodingEngine() audio.EncoderEngine {
-	if config.Encoder.FDKLibrary == "" {
-		return audio.EngineNative
-	}
-	return audio.EngineFDK
-}
-
 func (config Config) ParseLayout() filename.Layout {
 	if config.Output.Layout == layoutAlbumFolders {
 		return filename.LayoutAlbumFolders
@@ -126,18 +127,51 @@ func (config Config) ParseNumbering() albums.NumberingMode {
 	return albums.NumberingPerDirectory
 }
 
+var ErrConfigFolderUnknown = errors.New("the user configuration folder is unknown")
+
+type Locations struct {
+	ConfigDir string
+	WorkDir   string
+	MusicDir  string
+}
+
+func FindUserLocations() Locations {
+	return Locations{
+		ConfigDir: resolveUserFolder(os.UserConfigDir, applicationFolder),
+		WorkDir:   resolveUserFolder(os.UserCacheDir, applicationFolder),
+		MusicDir:  resolveUserFolder(os.UserHomeDir, musicFolder),
+	}
+}
+
+func resolveUserFolder(base func() (string, error), name string) string {
+	folder, err := base()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(folder, name)
+}
+
+func buildConfigPath(configDir string) string {
+	if configDir == "" {
+		return ""
+	}
+	return filepath.Join(configDir, configFileName)
+}
+
 type ConfigStore struct {
 	path        string
+	musicDir    string
 	environment func(string) (string, bool)
 	rename      func(oldPath, newPath string) error
 }
 
-func NewConfigStore(path string, environment func(string) (string, bool)) ConfigStore {
-	return ConfigStore{path: path, environment: environment, rename: os.Rename}
-}
-
-func DefaultConfigPath(appData string) string {
-	return filepath.Join(appData, configFolderName, configFileName)
+func NewConfigStore(locations Locations, environment func(string) (string, bool)) ConfigStore {
+	return ConfigStore{
+		path:        buildConfigPath(locations.ConfigDir),
+		musicDir:    locations.MusicDir,
+		environment: environment,
+		rename:      os.Rename,
+	}
 }
 
 func (store ConfigStore) Load(ctx context.Context, overrides map[string]string) (Config, error) {
@@ -153,37 +187,18 @@ func (store ConfigStore) Load(ctx context.Context, overrides map[string]string) 
 		return Config{}, err
 	}
 	if config.Output.Dir == "" {
-		config.Output.Dir = store.defaultOutput()
+		config.Output.Dir = store.musicDir
 	}
 	return config, nil
-}
-
-func (store ConfigStore) defaultOutput() string {
-	profile, _ := store.environment(userProfileVariable)
-	if profile == "" {
-		return ""
-	}
-	return filepath.Join(profile, defaultMusicFolder)
-}
-
-type EnvironmentPaths struct {
-	AppData      string
-	LocalAppData string
-}
-
-func ReadEnvironmentPaths(environment func(string) (string, bool)) EnvironmentPaths {
-	appData, _ := environment(appDataVariable)
-	localAppData, _ := environment(localAppDataVariable)
-	return EnvironmentPaths{AppData: appData, LocalAppData: localAppData}
 }
 
 func (store ConfigStore) Values(ctx context.Context) (map[string]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	values, defaultErr := parseConfigYAML(defaultConfigYAML)
+	values := maps.Clone(defaultValues)
 	fileValues, err := store.readUserFile()
-	if err = errors.Join(defaultErr, err); err != nil {
+	if err != nil {
 		return nil, err
 	}
 	if err := mergeKnownKeys(values, fileValues); err != nil {
@@ -220,6 +235,9 @@ func (store ConfigStore) Keys() []string {
 }
 
 func (store ConfigStore) readUserFile() (map[string]string, error) {
+	if store.path == "" {
+		return map[string]string{}, nil
+	}
 	data, err := os.ReadFile(filepath.Clean(store.path))
 	if errors.Is(err, fs.ErrNotExist) {
 		return map[string]string{}, nil
@@ -235,6 +253,9 @@ func (store ConfigStore) readUserFile() (map[string]string, error) {
 }
 
 func (store ConfigStore) writeUserFile(values map[string]string) error {
+	if store.path == "" {
+		return ErrConfigFolderUnknown
+	}
 	data, _ := yaml.Marshal(nestConfigValues(values))
 	if err := os.MkdirAll(filepath.Dir(store.path), configDirPermission); err != nil {
 		return fmt.Errorf("creating configuration folder: %w", err)

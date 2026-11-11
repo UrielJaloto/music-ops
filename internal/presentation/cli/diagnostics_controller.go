@@ -7,11 +7,12 @@ import (
 )
 
 type HealthChecker interface {
-	Check(ctx context.Context) diagnostics.DiagnosticsOutput
+	Diagnose(ctx context.Context) (diagnostics.DiagnosticsOutput, error)
 }
 
 type DiagnosticsResultPresenter interface {
 	Diagnosed(output diagnostics.DiagnosticsOutput) int
+	Failed(err error) int
 }
 
 type DiagnosticsController struct {
@@ -24,5 +25,10 @@ func NewDiagnosticsController(checker HealthChecker, presenter DiagnosticsResult
 }
 
 func (controller DiagnosticsController) Execute(ctx context.Context, _ []string) int {
-	return controller.presenter.Diagnosed(controller.checker.Check(ctx))
+	output, err := controller.checker.Diagnose(ctx)
+	code := controller.presenter.Diagnosed(output)
+	if err != nil {
+		return controller.presenter.Failed(err)
+	}
+	return code
 }

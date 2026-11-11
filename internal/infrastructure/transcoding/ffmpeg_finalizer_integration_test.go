@@ -32,7 +32,7 @@ func TestFFmpegFinalizer_Integration(t *testing.T) {
 	metadata := tracks.TrackMetadata{Title: "Benção 🎵", Artist: "Motörhead", AlbumArtist: "¥$", Album: "$werve", Genre: "Rock", Track: "3/12", Disc: "1/2", Date: "2024", Composer: "Writer", Copyright: "Label"}
 	request := publishing.FinalizeRequest{Staged: staged, CoverSource: coverSource, Cover: tracks.CoverArt{Stream: 1, Codec: "png"}, Destination: destination, Metadata: metadata}
 
-	err := NewFFmpegFinalizer(process.NewProcessRunner(), ffmpeg).Finalize(context.Background(), request)
+	err := NewFFmpegFinalizer(process.NewProcessRunner(), fixedTools{FFmpeg: ffmpeg}).Finalize(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}

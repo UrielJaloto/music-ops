@@ -4,21 +4,21 @@ import (
 	"cmp"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 )
 
 var (
-	ErrTrackPathMissing         = businesserr.NewBusinessError("track source path is missing")
-	ErrTrackTransitionForbidden = businesserr.NewBusinessError("track state transition is forbidden")
-	ErrTrackPositionOutOfRange  = businesserr.NewBusinessError("track position out of range")
+	ErrTrackPathMissing         = errors.New("track source path is missing")
+	ErrTrackTransitionForbidden = errors.New("track state transition is forbidden")
+	ErrTrackPositionOutOfRange  = errors.New("track position out of range")
 )
 
 const (

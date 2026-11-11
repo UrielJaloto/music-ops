@@ -10,19 +10,26 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/UrielJaloto/music-ops/internal/domain/runs"
 )
 
-func prepareTestStaging(t *testing.T) (StagingArea, string) {
+func preparedStaging(workRoot string, id runs.RunID) (*StagingArea, error) {
+	area := NewStagingArea(workRoot)
+	return area, area.Prepare(id)
+}
+
+func prepareTestStaging(t *testing.T) (*StagingArea, string) {
 	t.Helper()
 	output := t.TempDir()
-	area, err := PrepareStagingArea(output, "20261016-083005-abcd")
+	area, err := preparedStaging(output, "20261016-083005-abcd")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return area, output
 }
 
-func TestPrepareStagingArea_CreatesRunFolder(t *testing.T) {
+func TestStagingAreaPrepare_CreatesRunFolder(t *testing.T) {
 	area, output := prepareTestStaging(t)
 
 	expectedRoot := filepath.Join(output, "staging", "20261016-083005-abcd")
@@ -32,11 +39,11 @@ func TestPrepareStagingArea_CreatesRunFolder(t *testing.T) {
 	}
 }
 
-func TestPrepareStagingArea_OutputIsAFile(t *testing.T) {
+func TestStagingAreaPrepare_OutputIsAFile(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "file")
 	writeTestFile(t, output, "x")
 
-	_, err := PrepareStagingArea(output, "20261016-083005-abcd")
+	_, err := preparedStaging(output, "20261016-083005-abcd")
 
 	if err == nil || !strings.Contains(err.Error(), "creating staging area") {
 		t.Fatalf("err = %v", err)
@@ -289,11 +296,11 @@ func holdOpen(t *testing.T, path string) {
 	t.Cleanup(func() { _ = file.Close() })
 }
 
-func TestPrepareStagingArea_ProbeCannotBeWritten(t *testing.T) {
+func TestStagingAreaPrepare_ProbeCannotBeWritten(t *testing.T) {
 	output := t.TempDir()
 	writeTestFile(t, filepath.Join(output, stagingFolderName, "20261016-083005-abcd", stagingProbeName, "x"), "x")
 
-	_, err := PrepareStagingArea(output, "20261016-083005-abcd")
+	_, err := preparedStaging(output, "20261016-083005-abcd")
 
 	if err == nil || !strings.HasPrefix(err.Error(), "work folder is not writable: ") {
 		t.Fatalf("err = %v", err)

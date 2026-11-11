@@ -1,16 +1,16 @@
 package filename
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf16"
 
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
 )
 
-var ErrTemplatePlaceholderUnknown = businesserr.NewBusinessError("album template has an unknown placeholder")
+var ErrTemplatePlaceholderUnknown = errors.New("album template has an unknown placeholder")
 
 const (
 	MaxFileNameUnits     = 180

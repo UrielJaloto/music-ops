@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
@@ -88,10 +90,13 @@ func TestSettingsController_Errors(t *testing.T) {
 	}
 }
 
-type healthCheckerStub struct{ output diagnostics.DiagnosticsOutput }
+type healthCheckerStub struct {
+	output diagnostics.DiagnosticsOutput
+	err    error
+}
 
-func (stub healthCheckerStub) Check(context.Context) diagnostics.DiagnosticsOutput {
-	return stub.output
+func (stub healthCheckerStub) Diagnose(context.Context) (diagnostics.DiagnosticsOutput, error) {
+	return stub.output, stub.err
 }
 
 func TestDiagnosticsController(t *testing.T) {
@@ -113,7 +118,7 @@ func TestDiagnosticsController(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			var output bytes.Buffer
 
-			code := NewDiagnosticsController(healthCheckerStub{output: testCase.output}, NewDiagnosticsPresenter(&output)).Execute(context.Background(), nil)
+			code := NewDiagnosticsController(healthCheckerStub{output: testCase.output}, NewDiagnosticsPresenter(&output, NewErrorPresenter(&output))).Execute(context.Background(), nil)
 
 			if code != testCase.expectedCode {
 				t.Fatalf("code = %d", code)
@@ -123,18 +128,41 @@ func TestDiagnosticsController(t *testing.T) {
 	}
 }
 
-type versionReporterStub struct{}
+func TestDiagnosticsController_CloseFails(t *testing.T) {
+	var output bytes.Buffer
+	healthy := diagnostics.DiagnosticsOutput{IsHealthy: true}
 
-func (versionReporterStub) Report(context.Context) VersionReport {
-	return VersionReport{Version: "1.0.0", FFmpegVersion: "9.0.2-full_build", Engine: "FDK-AAC 256 kb/s"}
+	code := NewDiagnosticsController(healthCheckerStub{output: healthy, err: errors.New("advisor did not stop")}, NewDiagnosticsPresenter(&output, NewErrorPresenter(&output))).Execute(context.Background(), nil)
+
+	if code != 1 || !strings.HasSuffix(output.String(), "error: music-ops failed: advisor did not stop\n") {
+		t.Fatalf("code = %d output = %q", code, output.String())
+	}
+}
+
+type versionReporterStub struct{ output diagnostics.VersionOutput }
+
+func (stub versionReporterStub) ReportVersion(context.Context) diagnostics.VersionOutput {
+	return stub.output
 }
 
 func TestVersionController(t *testing.T) {
-	var output bytes.Buffer
+	cases := []struct {
+		name     string
+		output   diagnostics.VersionOutput
+		expected string
+	}{
+		{name: "FFmpegFound", output: diagnostics.VersionOutput{Version: "1.0.0", FFmpegVersion: "9.0.2-full_build", IsFFmpegFound: true, Engine: "FDK-AAC", BitrateKbps: 256}, expected: "music-ops 1.0.0\nffmpeg 9.0.2-full_build\nencoder FDK-AAC 256 kb/s\n"},
+		{name: "FFmpegMissing", output: diagnostics.VersionOutput{Version: "1.0.0"}, expected: "music-ops 1.0.0\nffmpeg not found\n"},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var output bytes.Buffer
 
-	code := NewVersionController(versionReporterStub{}, &output).Execute(context.Background(), nil)
+			code := NewVersionController(versionReporterStub{output: testCase.output}, &output).Execute(context.Background(), nil)
 
-	if code != 0 || output.String() != "music-ops 1.0.0\nffmpeg 9.0.2-full_build\nencoder FDK-AAC 256 kb/s\n" {
-		t.Fatalf("code = %d output = %q", code, output.String())
+			if code != 0 || output.String() != testCase.expected {
+				t.Fatalf("code = %d output = %q", code, output.String())
+			}
+		})
 	}
 }

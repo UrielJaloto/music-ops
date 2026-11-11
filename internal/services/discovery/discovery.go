@@ -12,7 +12,11 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 )
 
-var ErrFolderMissing = errors.New("folder is missing")
+var (
+	ErrFolderMissing        = errors.New("folder is missing")
+	ErrOutputInsideInput    = errors.New("output folder must not be inside the input folder")
+	ErrInspectorUnavailable = errors.New("the audio inspector is unavailable")
+)
 
 type FoundFile struct {
 	Path         string
@@ -36,6 +40,7 @@ type InspectedAudio struct {
 
 type SourceFileFinder interface {
 	FindAudioFiles(ctx context.Context, folder string) (FoundFiles, error)
+	IsInside(parent, child string) (bool, error)
 }
 
 type AudioInspector interface {
@@ -46,8 +51,15 @@ type SourceWorkPool interface {
 	Run(ctx context.Context, size int, task func(ctx context.Context, index int) error) error
 }
 
+type InspectionProgress interface {
+	Counted(total int)
+	Finished(path string, isFailed bool)
+}
+
 type DiscoverInput struct {
-	Folder string
+	Folder   string
+	Output   string
+	Progress InspectionProgress
 }
 
 type DiscoveredTrack struct {
@@ -77,20 +89,25 @@ func NewSourceService(finder SourceFileFinder, inspector AudioInspector, pool So
 }
 
 func (service SourceService) Discover(ctx context.Context, input DiscoverInput) (DiscoveredSources, error) {
-	if strings.TrimSpace(input.Folder) == "" {
-		return DiscoveredSources{}, ErrFolderMissing
+	if err := service.validateFolders(input); err != nil {
+		return DiscoveredSources{}, err
 	}
 	found, err := service.finder.FindAudioFiles(ctx, input.Folder)
 	if err != nil {
 		return DiscoveredSources{}, fmt.Errorf("finding audio files in %s: %w", input.Folder, err)
 	}
 	inspections := make([]sourceInspection, len(found.Audio))
+	input.Progress.Counted(len(found.Audio))
 	err = service.pool.Run(ctx, len(found.Audio), func(ctx context.Context, index int) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		inspections[index] = service.inspect(ctx, found.Audio[index])
-		return nil
+		inspection, err := service.inspect(ctx, found.Audio[index])
+		inspections[index] = inspection
+		if err == nil {
+			input.Progress.Finished(found.Audio[index].Path, inspection.failure != nil)
+		}
+		return err
 	})
 	if err != nil {
 		return DiscoveredSources{}, fmt.Errorf("inspecting audio files: %w", err)
@@ -98,22 +115,39 @@ func (service SourceService) Discover(ctx context.Context, input DiscoverInput) 
 	return collectDiscovered(inspections, found.Ignored), nil
 }
 
+func (service SourceService) validateFolders(input DiscoverInput) error {
+	if strings.TrimSpace(input.Folder) == "" || strings.TrimSpace(input.Output) == "" {
+		return ErrFolderMissing
+	}
+	isInside, err := service.finder.IsInside(input.Folder, input.Output)
+	if err != nil {
+		return fmt.Errorf("comparing %s with %s: %w", input.Output, input.Folder, err)
+	}
+	if isInside {
+		return ErrOutputInsideInput
+	}
+	return nil
+}
+
 type sourceInspection struct {
 	track   DiscoveredTrack
 	failure *SourceFailure
 }
 
-func (service SourceService) inspect(ctx context.Context, file FoundFile) sourceInspection {
+func (service SourceService) inspect(ctx context.Context, file FoundFile) (sourceInspection, error) {
 	inspected, err := service.inspector.Inspect(ctx, file.Path)
+	if errors.Is(err, ErrInspectorUnavailable) {
+		return sourceInspection{}, err
+	}
 	if err != nil {
-		return buildFailedInspection(file, err)
+		return buildFailedInspection(file, err), nil
 	}
 	source, err := toSourceDetails(file, inspected)
 	if err != nil {
-		return buildFailedInspection(file, err)
+		return buildFailedInspection(file, err), nil
 	}
 	id := tracks.NewTrackID(file.Path, file.Size, file.ModifiedAt)
-	return sourceInspection{track: DiscoveredTrack{ID: id, Source: source}}
+	return sourceInspection{track: DiscoveredTrack{ID: id, Source: source}}, nil
 }
 
 func toSourceDetails(file FoundFile, inspected InspectedAudio) (tracks.SourceDetails, error) {

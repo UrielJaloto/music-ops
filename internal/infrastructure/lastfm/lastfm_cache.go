@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	lastFMCacheBucket   = "lastfm"
+	CacheBucket         = "lastfm"
 	lastFMFoundTTL      = 30 * 24 * time.Hour
 	lastFMEmptyTTL      = 3 * 24 * time.Hour
 	lastFMKeySeparator  = "\x1f"
@@ -23,8 +23,8 @@ type TagSource interface {
 }
 
 type ByteCache interface {
-	Get(ctx context.Context, bucket, key string) ([]byte, bool, error)
-	Put(ctx context.Context, bucket, key string, value []byte, ttl time.Duration) error
+	Get(ctx context.Context, key string) ([]byte, bool, error)
+	Put(ctx context.Context, key string, value []byte, ttl time.Duration) error
 }
 
 type LastFMCache struct {
@@ -47,7 +47,7 @@ func (decorator LastFMCache) FetchArtistTags(ctx context.Context, artist string)
 }
 
 func (decorator LastFMCache) readCached(ctx context.Context, key string, fetch func() ([]string, error)) ([]string, error) {
-	stored, isHit, err := decorator.cache.Get(ctx, lastFMCacheBucket, key)
+	stored, isHit, err := decorator.cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (decorator LastFMCache) store(ctx context.Context, key string, tags []strin
 	if len(tags) == 0 {
 		ttl = lastFMEmptyTTL
 	}
-	return decorator.cache.Put(ctx, lastFMCacheBucket, key, encoded, ttl)
+	return decorator.cache.Put(ctx, key, encoded, ttl)
 }
 
 func decodeCachedTags(stored []byte) ([]string, error) {

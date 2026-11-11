@@ -29,7 +29,7 @@ func TestFFmpegFinalizer_ArgumentsGolden(t *testing.T) {
 			request := testCase.request
 			request.Destination = destination
 
-			err := NewFFmpegFinalizer(runner, "ffmpeg").Finalize(context.Background(), request)
+			err := NewFFmpegFinalizer(runner, fixedTools{FFmpeg: "ffmpeg"}).Finalize(context.Background(), request)
 
 			expected := append([]string{"-hide_banner", "-nostdin", "-y", "-i", "s.m4a"}, testCase.middle...)
 			expected = append(append(expected, tagArguments...), "-f", "mp4", "-movflags", "+faststart", destination+".tmp")

@@ -2,6 +2,7 @@ package albums
 
 import (
 	"cmp"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -9,8 +10,6 @@ import (
 
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 )
-
-const albumPathSeparators = "/\\"
 
 type NumberingMode int
 
@@ -110,8 +109,7 @@ func compareBySourcePosition(left, right *tracks.Track) int {
 }
 
 func extractSourceFileName(track *tracks.Track) string {
-	path := track.Source().Path
-	return path[strings.LastIndexAny(path, albumPathSeparators)+1:]
+	return filepath.Base(track.Source().Path)
 }
 
 func compareNatural(left, right string) int {

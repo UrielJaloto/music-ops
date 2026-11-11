@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"path/filepath"
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
@@ -22,7 +22,6 @@ const (
 	PublishStageFinalize          = "finalize"
 	PublishStageMove              = "move"
 	PublishStageVerify            = "verify"
-	outputPathSeparator           = "/"
 )
 
 type LibraryReader interface {
@@ -186,19 +185,15 @@ func (service PublishingService) FindPublished(ctx context.Context, input FindPu
 		if err != nil {
 			return PublishedTracks{}, fmt.Errorf("reading publishing journal: %w", err)
 		}
-		if isPublished && service.mover.Exists(destinationOf(input.Output, target)) {
+		if isPublished && service.mover.Exists(filepath.Join(input.Output, target)) {
 			published.Targets[id] = target
 		}
 	}
 	return published, nil
 }
 
-func destinationOf(output, target string) string {
-	return strings.TrimRight(output, "/\\") + outputPathSeparator + target
-}
-
 func (service PublishingService) Publish(ctx context.Context, input PublishInput) (PublishOutput, error) {
-	destination := destinationOf(input.Output, input.Track.Target)
+	destination := filepath.Join(input.Output, input.Track.Target)
 	_, isPublished, err := service.journal.IsPublished(ctx, input.Track.ID)
 	if err != nil {
 		return buildFailedPublish(PublishStageJournal, err, destination), nil

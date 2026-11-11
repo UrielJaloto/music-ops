@@ -17,6 +17,7 @@ type ImportClock interface {
 }
 
 type ImportRunIDs interface {
+	ReserveRunID(startedAt time.Time) (runs.RunID, error)
 	NewRunID(startedAt time.Time) (runs.RunID, error)
 }
 
@@ -41,6 +42,10 @@ func (runtime ImportRuntime) Now() time.Time {
 
 func (runtime ImportRuntime) NewRunID(startedAt time.Time) (runs.RunID, error) {
 	return runtime.runIDs.NewRunID(startedAt)
+}
+
+func (runtime ImportRuntime) ReserveRunID(startedAt time.Time) (runs.RunID, error) {
+	return runtime.runIDs.ReserveRunID(startedAt)
 }
 
 func (runtime ImportRuntime) Progress() importing.ImportProgress {

@@ -188,3 +188,43 @@ func TestFileScanner_FindAudioFiles_SkipsJunctions(t *testing.T) {
 		t.Fatalf("err = %v diff = %s", err, diff)
 	}
 }
+
+func TestFileScanner_IsInside(t *testing.T) {
+	root := t.TempDir()
+	input := filepath.Join(root, "in")
+	createFiles(t, root, "in/a.flac", "inbox/b.flac")
+	cases := []struct {
+		name     string
+		parent   string
+		child    string
+		expected bool
+	}{
+		{name: "SameFolder_IsInside", parent: input, child: input, expected: true},
+		{name: "TrailingSeparator_IsInside", parent: input, child: input + string(filepath.Separator), expected: true},
+		{name: "ExistingChild_IsInside", parent: root, child: input, expected: true},
+		{name: "MissingDeepChild_IsInside", parent: input, child: filepath.Join(input, "new", "deeper"), expected: true},
+		{name: "SiblingWithSamePrefix_IsOutside", parent: input, child: filepath.Join(root, "inbox")},
+		{name: "ParentOfInput_IsOutside", parent: input, child: root},
+		{name: "MissingParent_IsOutside", parent: filepath.Join(root, "missing"), child: filepath.Join(root, "missing", "out")},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			isInside, err := NewFileScanner().IsInside(testCase.parent, testCase.child)
+
+			if err != nil || isInside != testCase.expected {
+				t.Fatalf("inside = %v err = %v", isInside, err)
+			}
+		})
+	}
+}
+
+func TestFileScanner_IsInside_RelativeChild(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+
+	isInside, err := NewFileScanner().IsInside(root, filepath.Join("out", "music"))
+
+	if err != nil || !isInside {
+		t.Fatalf("inside = %v err = %v", isInside, err)
+	}
+}

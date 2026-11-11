@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,8 +60,22 @@ func TestE2E_HappyPath(t *testing.T) {
 				t.Fatal("cover missing")
 			}
 			assertInputUnchanged(t, environment.input, before)
+			environment.assertOneRunFolder()
 		})
 	}
+}
+
+func (environment *e2eEnvironment) assertOneRunFolder() {
+	environment.t.Helper()
+	folders, _ := filepath.Glob(filepath.Join(environment.localAppData, "music-ops", "runs", "*"))
+	if len(folders) != 1 || !fileExists(filepath.Join(folders[0], "report.json")) || !fileExists(filepath.Join(folders[0], "log.jsonl")) {
+		environment.t.Fatalf("run folders = %v", folders)
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (environment *e2eEnvironment) hasAttachedCover(path string) bool {
@@ -300,9 +313,13 @@ func TestE2E_CrashThenResume(t *testing.T) {
 		stereo("Album/03.flac", "flac", fixtureTags{title: "Three", artist: "Band"}),
 	)
 	before := snapshotHashes(t, environment.input)
-	environment.extraEnv = []string{"MUSIC_OPS_TEST_CRASH_AFTER=2"}
-	crashed := environment.run("run", environment.input)
-	environment.extraEnv = nil
+	reached := environment.lastfm.blockFirstRequest()
+	running := environment.start("run", environment.input)
+	running.waitFor(reached)
+	if err := running.command.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	crashed := running.wait()
 
 	resumed := environment.run("run", environment.input)
 
@@ -339,19 +356,21 @@ func TestE2E_PreviewLeavesOutputUntouched(t *testing.T) {
 
 func TestE2E_Cancellation(t *testing.T) {
 	environment := newE2EEnvironment(t)
-	fixtures := []fixture{}
-	for index := range 12 {
-		long := stereo("Album/"+string(rune('a'+index))+".flac", "flac", fixtureTags{title: "Track " + string(rune('A'+index)), artist: "Band"})
-		long.seconds = 20
-		fixtures = append(fixtures, long)
-	}
-	environment.addInput(fixtures...)
+	environment.addInput(
+		stereo("Album/01.flac", "flac", fixtureTags{title: "One", artist: "Band"}),
+		stereo("Album/02.flac", "flac", fixtureTags{title: "Two", artist: "Band"}),
+	)
 	before := snapshotHashes(t, environment.input)
-	environment.extraEnv = []string{"MUSIC_OPS_TEST_CANCEL_AFTER_MS=1500"}
+	reached := environment.lastfm.blockFirstRequest()
+	running := environment.start("run", environment.input)
+	running.waitFor(reached)
+	if err := running.interrupt(); err != nil {
+		t.Fatal(err)
+	}
 
-	result := environment.run("run", environment.input)
+	result := running.wait()
 
-	if result.ExitCode != 130 || !bytes.Contains([]byte(result.Stderr), []byte("cancelled")) {
+	if result.ExitCode != 130 || !strings.Contains(result.Stderr, "cancelled") {
 		t.Fatalf("result = %+v", result)
 	}
 	assertNoLeftovers(t, environment.output, environment.localAppData)

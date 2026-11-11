@@ -134,7 +134,9 @@ func runConversionCase(t *testing.T, testCase conversionCase) {
 	}
 	profile := audio.NewEncodingProfile(audio.EngineFDK)
 
-	output, err := service.Convert(ctx, ConvertInput{Tracks: testCase.tracks, Profile: profile})
+	progress := &progressSpy{}
+
+	output, err := service.Convert(ctx, ConvertInput{Tracks: testCase.tracks, Profile: profile, Progress: progress})
 
 	if !errors.Is(err, testCase.expectedError) {
 		t.Fatalf("error = %v, want %v", err, testCase.expectedError)
@@ -145,6 +147,9 @@ func runConversionCase(t *testing.T, testCase conversionCase) {
 	if err == nil && (len(output.Failed) != testCase.expectedFailed || len(output.Converted) != len(testCase.tracks)-testCase.expectedFailed) {
 		t.Fatalf("output = %+v", output)
 	}
+	if err == nil && (len(progress.finished) != len(testCase.tracks) || progress.failed != testCase.expectedFailed) {
+		t.Fatalf("progress = %+v", progress)
+	}
 }
 
 func TestConversionService_Convert_PassesProfileAndPaths(t *testing.T) {
@@ -153,7 +158,7 @@ func TestConversionService_Convert_PassesProfileAndPaths(t *testing.T) {
 	service := NewConversionService(encoder, &copierSpy{}, stagingFake{}, &conversionJournalFake{}, sequentialPool{})
 	profile := audio.NewEncodingProfile(audio.EngineNative)
 
-	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "a", Source: "in/a.flac", Codec: "flac", Quality: quality}}, Profile: profile})
+	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "a", Source: "in/a.flac", Codec: "flac", Quality: quality}}, Profile: profile, Progress: &progressSpy{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +175,7 @@ func TestConversionService_Convert_CopierFailure(t *testing.T) {
 	copier := &copierSpy{err: errTechnical}
 	service := NewConversionService(&encoderSpy{}, copier, stagingFake{}, &conversionJournalFake{}, sequentialPool{})
 
-	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "b", Source: "in/b.m4a", Codec: "aac", Quality: aacQuality(t)}}})
+	output, err := service.Convert(context.Background(), ConvertInput{Tracks: []ConvertTrack{{ID: "b", Source: "in/b.m4a", Codec: "aac", Quality: aacQuality(t)}}, Progress: &progressSpy{}})
 
 	if err != nil || len(output.Failed) != 1 || output.Failed[0].ID != "b" || output.Failed[0].Source != "in/b.m4a" {
 		t.Fatalf("output = %+v err = %v", output, err)
@@ -197,4 +202,16 @@ func (sequentialPool) Run(ctx context.Context, size int, task func(ctx context.C
 		}
 	}
 	return nil
+}
+
+type progressSpy struct {
+	finished []string
+	failed   int
+}
+
+func (spy *progressSpy) Finished(path string, isFailed bool) {
+	spy.finished = append(spy.finished, path)
+	if isFailed {
+		spy.failed++
+	}
 }

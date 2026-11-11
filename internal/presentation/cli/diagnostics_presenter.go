@@ -18,10 +18,15 @@ const (
 
 type DiagnosticsPresenter struct {
 	output io.Writer
+	errors ErrorPresenter
 }
 
-func NewDiagnosticsPresenter(output io.Writer) DiagnosticsPresenter {
-	return DiagnosticsPresenter{output: output}
+func NewDiagnosticsPresenter(output io.Writer, errors ErrorPresenter) DiagnosticsPresenter {
+	return DiagnosticsPresenter{output: output, errors: errors}
+}
+
+func (presenter DiagnosticsPresenter) Failed(err error) int {
+	return presenter.errors.Present(err)
 }
 
 func (presenter DiagnosticsPresenter) Diagnosed(output diagnostics.DiagnosticsOutput) int {

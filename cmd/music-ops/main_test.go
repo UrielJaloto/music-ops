@@ -4,54 +4,131 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"errors"
-	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/UrielJaloto/music-ops/internal/infrastructure/config"
-	"github.com/UrielJaloto/music-ops/internal/presentation/cli"
-	"github.com/UrielJaloto/music-ops/internal/services/importing"
+	"github.com/UrielJaloto/music-ops/internal/infrastructure/storage"
 )
 
-func testEnvironment(t *testing.T) func(string) (string, bool) {
+func userFolders(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	isolated := map[string]string{"APPDATA": filepath.Join(root, "appdata"), "LOCALAPPDATA": filepath.Join(root, "localappdata")}
-	return func(name string) (string, bool) {
-		if value, isSet := isolated[name]; isSet {
-			return value, true
-		}
-		return os.LookupEnv(name)
+	t.Setenv("APPDATA", filepath.Join(root, "appdata"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "appdata"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "localappdata"))
+	t.Setenv("HOME", root)
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
 	}
+	return filepath.Join(cache, "music-ops")
 }
 
 func runCommand(t *testing.T, arguments ...string) (int, string, string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	code := run(arguments, terminal{input: strings.NewReader(""), output: &stdout, errors: &stderr}, testEnvironment(t))
+	code := run(arguments, terminal{input: strings.NewReader(""), output: &stdout, errors: &stderr}, os.LookupEnv)
 	return code, stdout.String(), stderr.String()
 }
 
+func offline(arguments ...string) []string {
+	return append(arguments, "--set", "lastfm.base_url=http://127.0.0.1:1/", "--set", "advisor.port=1099")
+}
+
 func TestRun_Version(t *testing.T) {
+	userFolders(t)
+
 	code, stdout, stderr := runCommand(t, "version")
 
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if code != 0 || len(lines) != 3 || lines[0] != "music-ops dev" || !strings.HasPrefix(lines[1], "ffmpeg ") || !strings.HasPrefix(lines[2], "encoder ") || stderr != "" {
+	if code != 0 || len(lines) != 3 || lines[0] != "music-ops dev" || !strings.HasPrefix(lines[1], "ffmpeg ") || !strings.HasSuffix(lines[2], " kb/s") || stderr != "" {
 		t.Fatalf("code = %d stdout = %q stderr = %q", code, stdout, stderr)
 	}
 }
 
-func TestRun_MissingFFmpeg(t *testing.T) {
+func TestRun_Version_WithoutFFmpeg(t *testing.T) {
+	userFolders(t)
 	missing := filepath.Join(t.TempDir(), "ffmpeg.exe")
 
-	code, _, stderr := runCommand(t, "run", t.TempDir(), "--set", "encoder.ffmpeg="+missing, "--out", t.TempDir())
+	code, stdout, _ := runCommand(t, "version", "--set", "encoder.ffmpeg="+missing)
+
+	if code != 0 || stdout != "music-ops dev\nffmpeg not found\n" {
+		t.Fatalf("code = %d stdout = %q", code, stdout)
+	}
+}
+
+func TestRun_MissingFFmpeg(t *testing.T) {
+	userFolders(t)
+	missing := filepath.Join(t.TempDir(), "ffmpeg.exe")
+	input := t.TempDir()
+	writeFile(t, filepath.Join(input, "track.flac"))
+
+	code, _, stderr := runCommand(t, offline("run", input, "--set", "encoder.ffmpeg="+missing, "--out", t.TempDir())...)
 
 	if code != 1 || !strings.Contains(stderr, "winget install -e --id Gyan.FFmpeg") {
 		t.Fatalf("code = %d stderr = %q", code, stderr)
+	}
+}
+
+func TestRun_RunInProgress_FailsBeforeTheFolderDialog(t *testing.T) {
+	workDir := userFolders(t)
+	if err := os.MkdirAll(workDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	busy := storage.NewBoltStore(filepath.Join(workDir, stateFileName))
+	if err := busy.Open(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = busy.Close() })
+
+	code, _, stderr := runCommand(t, offline("run", "--out", t.TempDir())...)
+
+	if code != 1 || stderr != "error: another music-ops run is in progress\n" {
+		t.Fatalf("code = %d stderr = %q", code, stderr)
+	}
+}
+
+func TestRun_WorkFolderFailures(t *testing.T) {
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, workDir string)
+	}{
+		{name: "WorkFolderUnknown", prepare: func(t *testing.T, _ string) {
+			t.Setenv("LOCALAPPDATA", "")
+			t.Setenv("XDG_CACHE_HOME", "")
+			t.Setenv("HOME", "")
+		}},
+		{name: "StateFileIsAFolder", prepare: func(t *testing.T, workDir string) {
+			if err := os.MkdirAll(filepath.Join(workDir, stateFileName), 0o750); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "ReportsFolderIsAFile", prepare: func(t *testing.T, workDir string) { writeFile(t, filepath.Join(workDir, "runs")) }},
+		{name: "StagingFolderIsAFile", prepare: func(t *testing.T, workDir string) { writeFile(t, filepath.Join(workDir, "staging")) }},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.prepare(t, userFolders(t))
+
+			code, _, stderr := runCommand(t, offline("run", t.TempDir(), "--out", t.TempDir())...)
+
+			if code != 1 || !strings.HasPrefix(stderr, "error: ") {
+				t.Fatalf("code = %d stderr = %q", code, stderr)
+			}
+		})
+	}
+}
+
+func TestRun_Status_ReportsUnreachableLastFM(t *testing.T) {
+	userFolders(t)
+
+	code, stdout, _ := runCommand(t, offline("status", "--out", t.TempDir())...)
+
+	if code != 1 || !strings.Contains(stdout, "last.fm") || !strings.Contains(stdout, "required check(s) failed") {
+		t.Fatalf("code = %d stdout = %q", code, stdout)
 	}
 }
 
@@ -67,6 +144,8 @@ func TestRun_CommandLineAndConfigErrors(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
+			userFolders(t)
+
 			code, _, stderr := runCommand(t, testCase.arguments...)
 
 			if code != testCase.expectedCode || stderr != testCase.expectedStderr {
@@ -77,6 +156,8 @@ func TestRun_CommandLineAndConfigErrors(t *testing.T) {
 }
 
 func TestRun_ConfigAndUsage(t *testing.T) {
+	userFolders(t)
+
 	pathCode, pathOut, _ := runCommand(t, "config", "path")
 	unknownCode, unknownOut, _ := runCommand(t, "explode")
 
@@ -88,139 +169,6 @@ func TestRun_ConfigAndUsage(t *testing.T) {
 	}
 }
 
-func newTestWiring(t *testing.T) *wiring {
-	t.Helper()
-	return newTestWiringWith(t, map[string]string{})
-}
-
-func newTestWiringWith(t *testing.T, extra map[string]string) *wiring {
-	t.Helper()
-	environment := testEnvironment(t)
-	paths := config.ReadEnvironmentPaths(environment)
-	store := config.NewConfigStore(config.DefaultConfigPath(paths.AppData), environment)
-	overrides := map[string]string{"output.dir": t.TempDir(), "lastfm.base_url": "http://127.0.0.1:1/", "advisor.port": "1099"}
-	maps.Copy(overrides, extra)
-	loaded, err := store.Load(context.Background(), overrides)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var stdout, stderr bytes.Buffer
-	application := newWiring(wiringSettings{config: loaded, paths: paths, request: cli.RouterRequest{Command: "run"}, console: terminal{input: strings.NewReader(""), output: &stdout, errors: &stderr}, environment: environment, store: store})
-	t.Cleanup(func() { application.close(context.Background()) })
-	return application
-}
-
-func TestWiring_BuildsEveryCommandGraph(t *testing.T) {
-	_, importErr := newTestWiring(t).newImportController(context.Background())
-	_, watchErr := newTestWiring(t).watchCommand(context.Background())
-	_, versionErr := newTestWiring(t).versionCommand(context.Background())
-	application := newTestWiring(t)
-
-	if importErr != nil || watchErr != nil || versionErr != nil {
-		t.Fatalf("errors = %v %v %v", importErr, watchErr, versionErr)
-	}
-	if application.statusCommand() == nil || application.configCommand() == nil || application.advisorCommand() == nil {
-		t.Fatal("command missing")
-	}
-}
-
-func TestWiring_SecondImportStackReportsBusyLibrary(t *testing.T) {
-	application := newTestWiring(t)
-
-	_, firstErr := application.newImportController(context.Background())
-	_, secondErr := application.newImportController(context.Background())
-
-	if firstErr != nil || !errors.Is(secondErr, importing.ErrRunInProgress) {
-		t.Fatalf("errors = %v %v", firstErr, secondErr)
-	}
-}
-
-func TestWiring_EncodingFailures(t *testing.T) {
-	notExecutable := filepath.Join(t.TempDir(), "ffmpeg.exe")
-	if err := os.WriteFile(notExecutable, []byte("text"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct {
-		name     string
-		override map[string]string
-	}{
-		{name: "FFprobeMissing", override: map[string]string{"encoder.ffprobe": filepath.Join(t.TempDir(), "ffprobe.exe")}},
-		{name: "FFmpegDoesNotRun", override: map[string]string{"encoder.ffmpeg": notExecutable}},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			_, previewErr := newTestWiringWith(t, testCase.override).previewCommand(context.Background())
-			_, versionErr := newTestWiringWith(t, testCase.override).versionCommand(context.Background())
-			_, watchErr := newTestWiringWith(t, testCase.override).watchCommand(context.Background())
-
-			if previewErr == nil || versionErr == nil || watchErr == nil {
-				t.Fatalf("errors = %v %v %v", previewErr, versionErr, watchErr)
-			}
-		})
-	}
-}
-
-func TestWiring_StorageFailures(t *testing.T) {
-	cases := []struct {
-		name    string
-		prepare func(t *testing.T, workRoot string) string
-	}{
-		{name: "WorkFolderUnknown", prepare: func(*testing.T, string) string { return "" }},
-		{name: "WorkFolderIsAFile", prepare: func(t *testing.T, workRoot string) string {
-			file := filepath.Join(t.TempDir(), "file")
-			writeFile(t, file)
-			return file
-		}},
-		{name: "StateFileIsAFolder", prepare: func(t *testing.T, workRoot string) string {
-			if err := os.MkdirAll(filepath.Join(workRoot, applicationFolder, stateFileName), 0o750); err != nil {
-				t.Fatal(err)
-			}
-			return workRoot
-		}},
-		{name: "ReportsFolderIsAFile", prepare: func(t *testing.T, workRoot string) string {
-			writeFile(t, filepath.Join(workRoot, applicationFolder, "runs"))
-			return workRoot
-		}},
-		{name: "InterruptedRunCannotBeRemoved", prepare: func(t *testing.T, workRoot string) string {
-			lockFolder(t, filepath.Join(workRoot, applicationFolder, "staging", "20260101-000000-dead"))
-			return workRoot
-		}},
-	}
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			application := newTestWiring(t)
-			application.settings.paths.LocalAppData = testCase.prepare(t, t.TempDir())
-
-			_, err := application.newImportController(context.Background())
-
-			if err == nil {
-				t.Fatal("storage accepted")
-			}
-		})
-	}
-}
-
-func TestWiring_CloseReportsFailures(t *testing.T) {
-	application := newTestWiring(t)
-	application.onClose(func(context.Context) error { return errors.New("close failed") })
-
-	application.close(context.Background())
-
-	stderr := application.settings.console.errors.(*bytes.Buffer).String()
-	if !strings.Contains(stderr, "close failed") {
-		t.Fatalf("stderr = %q", stderr)
-	}
-}
-
-func TestWiring_VerboseLogsToTheConsole(t *testing.T) {
-	application := newTestWiring(t)
-	application.settings.request.IsVerbose = true
-
-	if application.consoleLog() != application.settings.console.errors {
-		t.Fatal("verbose log does not reach stderr")
-	}
-}
-
 func writeFile(t *testing.T, path string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -229,15 +177,4 @@ func writeFile(t *testing.T, path string) {
 	if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func lockFolder(t *testing.T, folder string) {
-	t.Helper()
-	path := filepath.Join(folder, "track.m4a")
-	writeFile(t, path)
-	file, err := os.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = file.Close() })
 }

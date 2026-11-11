@@ -25,6 +25,9 @@ const (
 	localAdvisorPrefix    = "local:"
 	chatCompletionsPath   = "/v1/chat/completions"
 	healthPath            = "/health"
+	CompletionTimeout     = 10 * time.Minute
+	HealthTimeout         = 2 * time.Second
+	ModelLoadingTimeout   = 60 * time.Second
 )
 
 var (
@@ -110,7 +113,7 @@ func suggestInBatches[R, S any](ctx context.Context, complete completeFunc, task
 	if err != nil {
 		return nil, fmt.Errorf("building advisor message: %w", err)
 	}
-	request := newChatRequest(task.system, string(message), task.schemaName, task.schema, len(requests))
+	request := task.buildChatRequest(string(message), len(requests))
 	suggestions, err := completeAndDecode(ctx, complete, request, func(raw []byte) ([]S, error) { return task.decode(raw, keys) })
 	if !errors.Is(err, ErrAdvisorAnswerTooLong) || len(requests) == 1 {
 		return suggestions, err
@@ -175,11 +178,11 @@ type chatRequest struct {
 	ChatTemplateKwargs map[string]any     `json:"chat_template_kwargs,omitempty"`
 }
 
-func newChatRequest(system, user, schemaName string, schema map[string]any, items int) chatRequest {
+func (task advisorTask[R, S]) buildChatRequest(user string, items int) chatRequest {
 	return chatRequest{
-		Messages:       []chatMessage{{Role: "system", Content: system}, {Role: "user", Content: user}},
+		Messages:       []chatMessage{{Role: "system", Content: task.system}, {Role: "user", Content: user}},
 		MaxTokens:      llamaTokensPerItem*items + llamaTokensOverhead,
-		ResponseFormat: chatResponseFormat{Type: "json_schema", JSONSchema: chatJSONSchema{Name: schemaName, Strict: true, Schema: schema}},
+		ResponseFormat: chatResponseFormat{Type: "json_schema", JSONSchema: chatJSONSchema{Name: task.schemaName, Strict: true, Schema: task.schema}},
 	}
 }
 

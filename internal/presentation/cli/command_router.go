@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -29,6 +31,8 @@ var ErrCommandLineInvalid = errors.New("command line is invalid")
 
 var helpArguments = map[string]bool{commandHelp: true, "-h": true, "--help": true}
 
+var valueFlags = []string{"out", "layout", "set"}
+
 var commandsWithRawArguments = map[string]bool{CommandConfig: true}
 
 const usageText = `usage: music-ops <command> [arguments] [flags]
@@ -50,7 +54,7 @@ flags (every command except config):
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable
   --verbose                    print detailed logs to the console
-  --no-open                    do not open the report and the output folder
+  --open                       open the report and the output folder when done
 `
 
 type CommandController interface {
@@ -65,8 +69,15 @@ type RouterRequest struct {
 	OpensFiles bool
 }
 
+func SelectLogOutput(request RouterRequest, errorOutput io.Writer) io.Writer {
+	if request.IsVerbose {
+		return errorOutput
+	}
+	return nil
+}
+
 func ParseCommandLine(arguments []string) (RouterRequest, error) {
-	request := RouterRequest{Command: CommandRun, Arguments: []string{}, Overrides: map[string]string{}, OpensFiles: true}
+	request := RouterRequest{Command: CommandRun, Arguments: []string{}, Overrides: map[string]string{}}
 	if len(arguments) > 0 && startsWithCommand(arguments[0]) {
 		request.Command = arguments[0]
 		arguments = arguments[1:]
@@ -90,18 +101,16 @@ func parseCommandFlags(request RouterRequest, arguments []string) (RouterRequest
 	settings := settingFlags{}
 	flags.Var(&settings, "set", "")
 	verbose := flags.Bool("verbose", false, "")
-	noOpen := flags.Bool("no-open", false, "")
+	opensFiles := flags.Bool("open", false, "")
 	if err := flags.Parse(reorderFlags(arguments)); err != nil {
 		return RouterRequest{}, fmt.Errorf("%w: %w", ErrCommandLineInvalid, err)
 	}
-	for key, value := range settings {
-		request.Overrides[key] = value
-	}
+	maps.Copy(request.Overrides, settings)
 	addOverride(request.Overrides, outputDirKey, *output)
 	addOverride(request.Overrides, outputLayoutKey, *layout)
 	request.Arguments = flags.Args()
 	request.IsVerbose = *verbose
-	request.OpensFiles = !*noOpen
+	request.OpensFiles = *opensFiles
 	return request, nil
 }
 
@@ -125,7 +134,7 @@ func reorderFlags(arguments []string) []string {
 
 func isValueFlag(argument string) bool {
 	name := strings.TrimLeft(argument, "-")
-	return !strings.Contains(name, keyValueDivider) && (name == "out" || name == "layout" || name == "set")
+	return !strings.Contains(name, keyValueDivider) && slices.Contains(valueFlags, name)
 }
 
 func addOverride(overrides map[string]string, key, value string) {
@@ -143,7 +152,7 @@ func (settings settingFlags) String() string {
 func (settings settingFlags) Set(value string) error {
 	key, setting, hasDivider := strings.Cut(value, keyValueDivider)
 	if !hasDivider || strings.TrimSpace(key) == "" {
-		return fmt.Errorf("--set expects key=value, got %q", value)
+		return fmt.Errorf("expected key=value, got %q", value)
 	}
 	settings[strings.TrimSpace(key)] = setting
 	return nil

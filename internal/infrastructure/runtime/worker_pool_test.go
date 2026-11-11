@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -134,6 +135,22 @@ func TestRandomRunIDs_NewRunID_Format(t *testing.T) {
 	}
 }
 
+func TestRandomRunIDs_ReservedIDIsReturnedOnce(t *testing.T) {
+	startedAt := time.Date(2026, 10, 16, 8, 30, 5, 0, time.UTC)
+	ids := NewRandomRunIDs()
+
+	reserved, reserveErr := ids.ReserveRunID(startedAt)
+	first, firstErr := ids.NewRunID(startedAt.Add(time.Minute))
+	second, secondErr := ids.NewRunID(startedAt.Add(time.Minute))
+
+	if reserveErr != nil || firstErr != nil || secondErr != nil || first != reserved {
+		t.Fatalf("reserved = %q first = %q errors = %v %v %v", reserved, first, reserveErr, firstErr, secondErr)
+	}
+	if !strings.HasPrefix(string(second), "20261016-083105-") {
+		t.Fatalf("second = %q", second)
+	}
+}
+
 func TestSystemClock_Now_IsCurrentTime(t *testing.T) {
 	before := time.Now()
 
@@ -162,6 +179,10 @@ type fixedImportRunIDs struct{ id runs.RunID }
 
 func (ids fixedImportRunIDs) NewRunID(time.Time) (runs.RunID, error) { return ids.id, nil }
 
+func (ids fixedImportRunIDs) ReserveRunID(time.Time) (runs.RunID, error) {
+	return "reserved-" + ids.id, nil
+}
+
 func TestImportRuntime_DelegatesToParts(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	progress := &importProgressSpy{}
@@ -173,8 +194,12 @@ func TestImportRuntime_DelegatesToParts(t *testing.T) {
 		return nil
 	})
 	id, idErr := importRuntime.NewRunID(now)
+	reserved, reserveErr := importRuntime.ReserveRunID(now)
 	importRuntime.Progress().StageStarted("convert", 1)
 
+	if reserveErr != nil || reserved != "reserved-run-1" {
+		t.Fatalf("reserved = %q err = %v", reserved, reserveErr)
+	}
 	if err != nil || idErr != nil || calls.Load() != 3 || id != "run-1" || !importRuntime.Now().Equal(now) || len(progress.started) != 1 {
 		t.Fatalf("calls = %d id = %q err = %v %v progress = %v", calls.Load(), id, err, idErr, progress.started)
 	}

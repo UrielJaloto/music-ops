@@ -3,6 +3,7 @@ package watching
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -60,7 +61,7 @@ type archiverSpy struct {
 }
 
 func (spy *archiverSpy) Archive(_ context.Context, folder, destination string) error {
-	spy.archived = append(spy.archived, [2]string{folder, destination})
+	spy.archived = append(spy.archived, [2]string{folder, filepath.ToSlash(destination)})
 	return spy.err
 }
 
@@ -184,7 +185,7 @@ func TestWatchService_Watch_StabilityError_ReportsAndContinues(t *testing.T) {
 
 func TestWatchService_Watch_ArchiveFoldersIgnored(t *testing.T) {
 	doubles := newWatchDoubles()
-	doubles.watcher = watcherFake{existing: []string{"inbox/_processed", `inbox\_failed`, "inbox/a"}}
+	doubles.watcher = watcherFake{existing: []string{"inbox/_processed", filepath.Join("inbox", "_failed"), "inbox/a"}}
 
 	err := doubles.service().Watch(context.Background(), watchInput())
 

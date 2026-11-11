@@ -4,15 +4,17 @@ package transcoding
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/process"
 )
 
 func TestEncoderProbe_Integration(t *testing.T) {
-	ffmpeg, _ := requireFFmpeg(t)
+	ffmpeg, ffprobe := requireFFmpeg(t)
 	requireFDKLibrary(t)
-	probe := NewEncoderProbe(NewFFmpegCapabilityDetector(process.NewProcessRunner(), ffmpeg), NewFDKAACEncoder(nil, fdkLibraryPath()))
+	toolchain := NewToolchain(ToolchainSettings{FFmpeg: ffmpeg, FFprobe: ffprobe, LookPath: exec.LookPath}, process.NewProcessRunner())
+	probe := NewEncoderProbe(toolchain, NewFDKAACEncoder(nil, fdkLibraryPath()))
 
 	report, err := probe.ProbeEncoder(context.Background())
 

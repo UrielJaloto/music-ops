@@ -1,16 +1,16 @@
 package genres
 
 import (
+	"errors"
 	"slices"
 	"strings"
 
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
 )
 
 var (
-	ErrGenreNotInPool     = businesserr.NewBusinessError("genre is not in the pool")
-	ErrSubgenreNotInGenre = businesserr.NewBusinessError("subgenre does not belong to the genre")
+	ErrGenreNotInPool     = errors.New("genre is not in the pool")
+	ErrSubgenreNotInGenre = errors.New("subgenre does not belong to the genre")
 )
 
 const (

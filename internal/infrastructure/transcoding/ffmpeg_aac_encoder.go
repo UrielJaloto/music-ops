@@ -14,25 +14,28 @@ import (
 const bitsPerKilobit = 1000
 
 type FFmpegAACEncoder struct {
-	runner       ProcessExecutor
-	executable   string
-	capabilities FFmpegCapabilities
+	runner ProcessExecutor
+	tools  ToolResolver
 }
 
-func NewFFmpegAACEncoder(runner ProcessExecutor, executable string, capabilities FFmpegCapabilities) FFmpegAACEncoder {
-	return FFmpegAACEncoder{runner: runner, executable: executable, capabilities: capabilities}
+func NewFFmpegAACEncoder(runner ProcessExecutor, tools ToolResolver) FFmpegAACEncoder {
+	return FFmpegAACEncoder{runner: runner, tools: tools}
 }
 
 func (encoder FFmpegAACEncoder) Encode(ctx context.Context, request conversion.EncodeRequest) error {
-	arguments := buildNativeEncodeArguments(toProcessPath(request.Source), encoder.filterArguments(request), request)
-	return runToPartial(ctx, encoder.runner, encoder.executable, arguments, request.Destination)
+	tools, err := encoder.tools.ResolveTools(ctx)
+	if err != nil {
+		return err
+	}
+	arguments := buildNativeEncodeArguments(toProcessPath(request.Source), tools.Capabilities.buildFilterArguments(request), request)
+	return runToPartial(ctx, encoder.runner, process.ProcessRequest{Executable: tools.FFmpeg, Arguments: arguments}, request.Destination)
 }
 
-func (encoder FFmpegAACEncoder) filterArguments(request conversion.EncodeRequest) []string {
+func (capabilities FFmpegCapabilities) buildFilterArguments(request conversion.EncodeRequest) []string {
 	if !request.Profile.NeedsResampling(request.Quality) {
 		return []string{}
 	}
-	return []string{"-af", encoder.capabilities.BuildResampleFilter(request.Profile.SampleRate())}
+	return []string{"-af", capabilities.BuildResampleFilter(request.Profile.SampleRate())}
 }
 
 func buildNativeEncodeArguments(source string, filter []string, request conversion.EncodeRequest) []string {
@@ -48,16 +51,20 @@ func buildNativeEncodeArguments(source string, filter []string, request conversi
 }
 
 type FFmpegAudioCopier struct {
-	runner     ProcessExecutor
-	executable string
+	runner ProcessExecutor
+	tools  ToolResolver
 }
 
-func NewFFmpegAudioCopier(runner ProcessExecutor, executable string) FFmpegAudioCopier {
-	return FFmpegAudioCopier{runner: runner, executable: executable}
+func NewFFmpegAudioCopier(runner ProcessExecutor, tools ToolResolver) FFmpegAudioCopier {
+	return FFmpegAudioCopier{runner: runner, tools: tools}
 }
 
 func (copier FFmpegAudioCopier) CopyAudio(ctx context.Context, source, destination string) error {
-	return runToPartial(ctx, copier.runner, copier.executable, buildCopyAudioArguments(toProcessPath(source), destination), destination)
+	tools, err := copier.tools.ResolveTools(ctx)
+	if err != nil {
+		return err
+	}
+	return runToPartial(ctx, copier.runner, process.ProcessRequest{Executable: tools.FFmpeg, Arguments: buildCopyAudioArguments(toProcessPath(source), destination)}, destination)
 }
 
 func buildCopyAudioArguments(source, destination string) []string {
@@ -67,9 +74,9 @@ func buildCopyAudioArguments(source, destination string) []string {
 	}
 }
 
-func runToPartial(ctx context.Context, runner ProcessExecutor, executable string, arguments []string, destination string) error {
+func runToPartial(ctx context.Context, runner ProcessExecutor, request process.ProcessRequest, destination string) error {
 	partial := destination + partialSuffix
-	if _, err := runner.Run(ctx, process.ProcessRequest{Executable: executable, Arguments: arguments}); err != nil {
+	if _, err := runner.Run(ctx, request); err != nil {
 		return errors.Join(fmt.Errorf("writing %s: %w", destination, err), removeIfPresent(partial))
 	}
 	if err := os.Rename(partial, destination); err != nil {

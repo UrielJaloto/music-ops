@@ -9,8 +9,6 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
 
-const chooseFolderTitle = "Choose the folder to import"
-
 type FolderImporter interface {
 	Import(ctx context.Context, input importing.ImportInput) (importing.ImportOutput, error)
 }
@@ -19,8 +17,8 @@ type ImportPreviewer interface {
 	Preview(ctx context.Context, input importing.ImportInput) (importing.ImportPreviewOutput, error)
 }
 
-type FolderChooser interface {
-	ChooseFolder(ctx context.Context, title, start string) (string, error)
+type ProfileSource interface {
+	SelectProfile() audio.EncodingProfile
 }
 
 type RunFinisher interface {
@@ -41,7 +39,7 @@ type ImportResultPresenter interface {
 
 type ImportDefaults struct {
 	Output        string
-	Profile       audio.EncodingProfile
+	Profile       ProfileSource
 	Numbering     albums.NumberingMode
 	Layout        filename.Layout
 	AlbumTemplate string
@@ -53,11 +51,6 @@ type ImportServices struct {
 	Reporter  RunReporter
 }
 
-type ImportDesktop struct {
-	Chooser  FolderChooser
-	Finisher RunFinisher
-}
-
 type ImportSettings struct {
 	Defaults   ImportDefaults
 	OpensFiles bool
@@ -65,21 +58,17 @@ type ImportSettings struct {
 
 type ImportController struct {
 	services  ImportServices
-	desktop   ImportDesktop
+	finisher  RunFinisher
 	presenter ImportResultPresenter
 	settings  ImportSettings
 }
 
-func NewImportController(importServices ImportServices, desktop ImportDesktop, presenter ImportResultPresenter, settings ImportSettings) ImportController {
-	return ImportController{services: importServices, desktop: desktop, presenter: presenter, settings: settings}
+func NewImportController(importServices ImportServices, finisher RunFinisher, presenter ImportResultPresenter, settings ImportSettings) ImportController {
+	return ImportController{services: importServices, finisher: finisher, presenter: presenter, settings: settings}
 }
 
 func (controller ImportController) Run(ctx context.Context, arguments []string) int {
-	input, err := controller.buildImportInput(ctx, arguments)
-	if err != nil {
-		return controller.presenter.Failed(err)
-	}
-	output, err := controller.services.Importer.Import(ctx, input)
+	output, err := controller.services.Importer.Import(ctx, controller.buildImportInput(arguments))
 	if err != nil {
 		return controller.presenter.Failed(err)
 	}
@@ -97,11 +86,7 @@ func (controller ImportController) report(ctx context.Context, output importing.
 }
 
 func (controller ImportController) Preview(ctx context.Context, arguments []string) int {
-	input, err := controller.buildImportInput(ctx, arguments)
-	if err != nil {
-		return controller.presenter.Failed(err)
-	}
-	output, err := controller.services.Previewer.Preview(ctx, input)
+	output, err := controller.services.Previewer.Preview(ctx, controller.buildImportInput(arguments))
 	if err != nil {
 		return controller.presenter.Failed(err)
 	}
@@ -113,28 +98,24 @@ func (controller ImportController) finish(ctx context.Context, output importing.
 	if !controller.settings.OpensFiles {
 		return
 	}
-	if err := controller.desktop.Finisher.Finish(ctx, output); err != nil {
+	if err := controller.finisher.Finish(ctx, output); err != nil {
 		controller.presenter.FinishFailed(err)
 	}
 }
 
-func (controller ImportController) buildImportInput(ctx context.Context, arguments []string) (importing.ImportInput, error) {
-	folder, err := controller.folder(ctx, arguments)
-	if err != nil {
-		return importing.ImportInput{}, err
+func (controller ImportController) buildImportInput(arguments []string) importing.ImportInput {
+	input := buildImportInput(controller.settings.Defaults)
+	if len(arguments) > 0 {
+		input.Folder = arguments[0]
 	}
-	defaults := controller.settings.Defaults
-	return importing.ImportInput{
-		Folder: folder, Output: defaults.Output, Profile: defaults.Profile,
-		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate,
-	}, nil
+	return input
 }
 
-func (controller ImportController) folder(ctx context.Context, arguments []string) (string, error) {
-	if len(arguments) > 0 {
-		return arguments[0], nil
+func buildImportInput(defaults ImportDefaults) importing.ImportInput {
+	return importing.ImportInput{
+		Output: defaults.Output, Profile: defaults.Profile.SelectProfile(),
+		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate,
 	}
-	return controller.desktop.Chooser.ChooseFolder(ctx, chooseFolderTitle, "")
 }
 
 type RunCommand struct {

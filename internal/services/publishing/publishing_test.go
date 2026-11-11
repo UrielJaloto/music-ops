@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -141,41 +142,41 @@ func TestPublishingService_Publish(t *testing.T) {
 	}{
 		{
 			name: "HappyPath_CallsFinalizeMoveVerifyRecordInOrder", arrange: func(publishingDoubles) {},
-			expected:      PublishOutput{Status: PublishStatusPublished, Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusPublished, Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move", "verify", "record"},
 		},
 		{
 			name: "AlreadyPublished_SkipsAllWrites",
 			arrange: func(doubles publishingDoubles) {
 				doubles.journal.published = map[tracks.TrackID]string{"a": "Band - Song.m4a"}
-				doubles.mover.existing["out/Band - Song.m4a"] = true
+				doubles.mover.existing[filepath.FromSlash("out/Band - Song.m4a")] = true
 			},
-			expected: PublishOutput{Status: PublishStatusAlreadyPublished, Destination: "out/Band - Song.m4a"},
+			expected: PublishOutput{Status: PublishStatusAlreadyPublished, Destination: filepath.FromSlash("out/Band - Song.m4a")},
 		},
 		{
 			name: "JournalSaysPublishedButFileMissing_PublishesAgain",
 			arrange: func(doubles publishingDoubles) {
 				doubles.journal.published = map[tracks.TrackID]string{"a": "Band - Song.m4a"}
 			},
-			expected:      PublishOutput{Status: PublishStatusPublished, Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusPublished, Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move", "verify", "record"},
 		},
 		{
 			name:          "FinalizeFails_MoveNotCalled",
 			arrange:       func(doubles publishingDoubles) { doubles.finalizer.err = errTechnical },
-			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageFinalize, Reason: "technical failure", Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageFinalize, Reason: "technical failure", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize"},
 		},
 		{
 			name:          "MoveFails_VerifyNotCalled",
 			arrange:       func(doubles publishingDoubles) { doubles.mover.moveErr = errTechnical },
-			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageMove, Reason: "technical failure", Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageMove, Reason: "technical failure", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move"},
 		},
 		{
 			name:          "VerifyFails_RemovesFileAndFails",
 			arrange:       func(doubles publishingDoubles) { doubles.verifier.err = errTechnical },
-			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageVerify, Reason: "technical failure", Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageVerify, Reason: "technical failure", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move", "verify", "remove"},
 		},
 		{
@@ -184,19 +185,19 @@ func TestPublishingService_Publish(t *testing.T) {
 				doubles.verifier.err = errTechnical
 				doubles.mover.removeErr = errors.New("locked")
 			},
-			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageVerify, Reason: "technical failure (removing invalid file: locked)", Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageVerify, Reason: "technical failure (removing invalid file: locked)", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move", "verify", "remove"},
 		},
 		{
 			name:          "RecordFails_ReturnsFailure",
 			arrange:       func(doubles publishingDoubles) { doubles.journal.writeErr = errTechnical },
-			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageJournal, Reason: "technical failure", Destination: "out/Band - Song.m4a"},
+			expected:      PublishOutput{Status: PublishStatusFailed, Stage: PublishStageJournal, Reason: "technical failure", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 			expectedCalls: []string{"finalize", "move", "verify", "record"},
 		},
 		{
 			name:     "JournalReadFails_ReturnsFailure",
 			arrange:  func(doubles publishingDoubles) { doubles.journal.readErr = errTechnical },
-			expected: PublishOutput{Status: PublishStatusFailed, Stage: PublishStageJournal, Reason: "technical failure", Destination: "out/Band - Song.m4a"},
+			expected: PublishOutput{Status: PublishStatusFailed, Stage: PublishStageJournal, Reason: "technical failure", Destination: filepath.FromSlash("out/Band - Song.m4a")},
 		},
 	}
 	for _, testCase := range cases {
@@ -226,7 +227,7 @@ func TestPublishingService_Publish_PassesRequests(t *testing.T) {
 	if err != nil || doubles.finalizer.request != expectedRequest {
 		t.Fatalf("finalize request = %+v", doubles.finalizer.request)
 	}
-	if doubles.mover.moved[0] != [2]string{"stage/a.final.m4a", "out/Band - Song.m4a"} {
+	if doubles.mover.moved[0] != [2]string{"stage/a.final.m4a", filepath.FromSlash("out/Band - Song.m4a")} {
 		t.Fatalf("moved = %v", doubles.mover.moved)
 	}
 	if doubles.verifier.expected != (PublishedAudio{Metadata: track.Metadata, Duration: time.Minute, Bitrate: 256000, IsReencoded: true}) {
@@ -260,7 +261,7 @@ func TestPublishingService_Admit(t *testing.T) {
 		{
 			name: "LibraryHit_IsDuplicate", library: libraryReaderStub{paths: []string{"Band - Song.m4a"}},
 			tracks:              func(t *testing.T) []AdmitTrack { return []AdmitTrack{admitTrack(t, "a", "a.flac", "Song")} },
-			expectedPublishable: []tracks.TrackID{}, expectedDuplicates: []DuplicateTrack{{ID: "a", KeeperPath: "out/Band - Song.m4a"}},
+			expectedPublishable: []tracks.TrackID{}, expectedDuplicates: []DuplicateTrack{{ID: "a", KeeperPath: filepath.FromSlash("out/Band - Song.m4a")}},
 		},
 		{
 			name: "InRunDuplicates_KeepFirstByPath", library: libraryReaderStub{},
@@ -313,9 +314,9 @@ func TestPublishingService_FindPublished(t *testing.T) {
 		expected      map[tracks.TrackID]string
 		expectedError error
 	}{
-		{name: "PublishedAndPresent_IsFound", published: map[tracks.TrackID]string{"a": "A.m4a"}, existing: map[string]bool{"out/A.m4a": true}, expected: map[tracks.TrackID]string{"a": "A.m4a"}},
+		{name: "PublishedAndPresent_IsFound", published: map[tracks.TrackID]string{"a": "A.m4a"}, existing: map[string]bool{filepath.FromSlash("out/A.m4a"): true}, expected: map[tracks.TrackID]string{"a": "A.m4a"}},
 		{name: "PublishedButMissing_IsNotFound", published: map[tracks.TrackID]string{"a": "A.m4a"}, existing: map[string]bool{}, expected: map[tracks.TrackID]string{}},
-		{name: "NotPublished_IsNotFound", published: map[tracks.TrackID]string{}, existing: map[string]bool{"out/A.m4a": true}, expected: map[tracks.TrackID]string{}},
+		{name: "NotPublished_IsNotFound", published: map[tracks.TrackID]string{}, existing: map[string]bool{filepath.FromSlash("out/A.m4a"): true}, expected: map[tracks.TrackID]string{}},
 		{name: "JournalError_ReturnsWrappedError", readErr: errTechnical, expectedError: errTechnical},
 	}
 	for _, testCase := range cases {

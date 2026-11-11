@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/UrielJaloto/music-ops/internal/services/discovery"
@@ -12,13 +13,11 @@ import (
 var ErrSetupArtifactMissing = errors.New("advisor runtime or model artifact is missing")
 
 const (
-	SettingLlamaServer      = "advisor.llama_server"
-	SettingModelFile        = "advisor.model_file"
-	defaultServerExecutable = "llama-server.exe"
-	runtimeFolderName       = "llama.cpp"
-	modelsFolderName        = "models"
-	downloadsFolderName     = "downloads"
-	setupPathSeparator      = "/"
+	SettingLlamaServer  = "advisor.llama_server"
+	SettingModelFile    = "advisor.model_file"
+	runtimeFolderName   = "llama.cpp"
+	modelsFolderName    = "models"
+	downloadsFolderName = "downloads"
 )
 
 type ArtifactRequest struct {
@@ -73,18 +72,18 @@ func (service SetupService) InstallAdvisor(ctx context.Context, input InstallAdv
 	if err := validateSetupInput(input); err != nil {
 		return InstalledAdvisorOutput{}, err
 	}
-	folder := strings.TrimRight(input.Folder, "/\\")
-	runtimeFolder := joinSetupPath(folder, runtimeFolderName)
+	folder := filepath.Clean(input.Folder)
+	runtimeFolder := filepath.Join(folder, runtimeFolderName)
 	for _, artifact := range input.Runtime {
 		if err := service.installRuntime(ctx, artifact, folder, runtimeFolder); err != nil {
 			return InstalledAdvisorOutput{}, err
 		}
 	}
-	modelPath := joinSetupPath(folder, modelsFolderName, input.Model.Name)
+	modelPath := filepath.Join(folder, modelsFolderName, input.Model.Name)
 	if err := service.download(ctx, input.Model, modelPath); err != nil {
 		return InstalledAdvisorOutput{}, err
 	}
-	installed := InstalledAdvisorOutput{ServerPath: joinSetupPath(runtimeFolder, serverExecutable(input)), ModelPath: modelPath}
+	installed := InstalledAdvisorOutput{ServerPath: filepath.Join(runtimeFolder, input.ServerExecutableName), ModelPath: modelPath}
 	if err := service.saveSettings(ctx, installed); err != nil {
 		return InstalledAdvisorOutput{}, err
 	}
@@ -95,14 +94,14 @@ func validateSetupInput(input InstallAdvisorInput) error {
 	if strings.TrimSpace(input.Folder) == "" {
 		return discovery.ErrFolderMissing
 	}
-	if len(input.Runtime) == 0 || strings.TrimSpace(input.Model.URL) == "" {
+	if len(input.Runtime) == 0 || strings.TrimSpace(input.Model.URL) == "" || strings.TrimSpace(input.ServerExecutableName) == "" {
 		return ErrSetupArtifactMissing
 	}
 	return nil
 }
 
 func (service SetupService) installRuntime(ctx context.Context, artifact ArtifactRequest, folder, runtimeFolder string) error {
-	archive := joinSetupPath(folder, downloadsFolderName, artifact.Name)
+	archive := filepath.Join(folder, downloadsFolderName, artifact.Name)
 	if err := service.download(ctx, artifact, archive); err != nil {
 		return err
 	}
@@ -129,15 +128,4 @@ func (service SetupService) saveSettings(ctx context.Context, installed Installe
 		return fmt.Errorf("saving %s: %w", SettingModelFile, err)
 	}
 	return nil
-}
-
-func serverExecutable(input InstallAdvisorInput) string {
-	if strings.TrimSpace(input.ServerExecutableName) == "" {
-		return defaultServerExecutable
-	}
-	return input.ServerExecutableName
-}
-
-func joinSetupPath(parts ...string) string {
-	return strings.Join(parts, setupPathSeparator)
 }

@@ -14,10 +14,10 @@ import (
 const modulePath = "github.com/UrielJaloto/music-ops"
 
 var contextOrder = map[string][]string{
-	"domain":         {"businesserr", "credits", "audio", "filename", "genres", "tracks", "albums", "library", "runs"},
-	"services":       {"diagnostics", "settings", "discovery", "conversion", "crediting", "classification", "metadata", "publishing", "importing", "watching", "setup"},
+	"domain":         {"credits", "audio", "filename", "genres", "tracks", "albums", "library", "runs"},
+	"services":       {"diagnostics", "settings", "discovery", "conversion", "crediting", "classification", "metadata", "publishing", "importing", "watching", "session", "setup"},
 	"presentation":   {"cli"},
-	"infrastructure": {"process", "config", "runtime", "filesystem", "lastfm", "storage", "logging", "faultinjection", "artifacts", "transcoding", "desktop", "advisor"},
+	"infrastructure": {"process", "config", "runtime", "filesystem", "lastfm", "storage", "logging", "artifacts", "transcoding", "desktop", "advisor"},
 }
 
 var layerTargets = map[string][]string{

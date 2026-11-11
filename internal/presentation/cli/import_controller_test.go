@@ -13,6 +13,7 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/domain/runs"
+	"github.com/UrielJaloto/music-ops/internal/services/discovery"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
 
@@ -34,15 +35,10 @@ func (spy *importServiceSpy) Preview(_ context.Context, input importing.ImportIn
 	return spy.preview, spy.err
 }
 
-type chooserStub struct {
-	folder string
-	err    error
-	calls  int
-}
+type fixedProfile audio.EncoderEngine
 
-func (stub *chooserStub) ChooseFolder(context.Context, string, string) (string, error) {
-	stub.calls++
-	return stub.folder, stub.err
+func (engine fixedProfile) SelectProfile() audio.EncodingProfile {
+	return audio.NewEncodingProfile(audio.EncoderEngine(engine))
 }
 
 type finisherSpy struct {
@@ -56,7 +52,7 @@ func (spy *finisherSpy) Finish(context.Context, importing.ImportOutput) error {
 }
 
 func testDefaults() ImportDefaults {
-	return ImportDefaults{Output: "E:/Music", Profile: audio.NewEncodingProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}"}
+	return ImportDefaults{Output: "E:/Music", Profile: fixedProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}"}
 }
 
 type reporterStub struct {
@@ -73,7 +69,6 @@ func (stub *reporterStub) Present(context.Context, importing.ImportOutput) (stri
 type controllerFixture struct {
 	reporter *reporterStub
 	service  *importServiceSpy
-	chooser  *chooserStub
 	finisher *finisherSpy
 	output   *bytes.Buffer
 }
@@ -82,12 +77,11 @@ func newImportFixture(opensFiles bool) (ImportController, controllerFixture) {
 	fixture := controllerFixture{
 		reporter: &reporterStub{path: "C:/Local/music-ops/runs/r1/report.md"},
 		service:  &importServiceSpy{output: importing.ImportOutput{RunID: "r1", Output: "E:/Music", ExitStatus: 2}},
-		chooser:  &chooserStub{folder: "D:/Chosen"},
 		finisher: &finisherSpy{},
 		output:   &bytes.Buffer{},
 	}
 	presenter := NewImportPresenter(fixture.output, NewErrorPresenter(fixture.output))
-	controller := NewImportController(ImportServices{Importer: fixture.service, Previewer: fixture.service, Reporter: fixture.reporter}, ImportDesktop{Chooser: fixture.chooser, Finisher: fixture.finisher}, presenter, ImportSettings{Defaults: testDefaults(), OpensFiles: opensFiles})
+	controller := NewImportController(ImportServices{Importer: fixture.service, Previewer: fixture.service, Reporter: fixture.reporter}, fixture.finisher, presenter, ImportSettings{Defaults: testDefaults(), OpensFiles: opensFiles})
 	return controller, fixture
 }
 
@@ -100,28 +94,28 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 	if diff := differences([]importing.ImportInput{expected}, fixture.service.importInputs); diff != "" {
 		t.Fatalf("input (-want +got):\n%s", diff)
 	}
-	if code != 2 || fixture.chooser.calls != 0 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: C:/Local/music-ops/runs/r1/report.md") {
-		t.Fatalf("code = %d chooser = %d finisher = %d output = %q", code, fixture.chooser.calls, fixture.finisher.calls, fixture.output.String())
+	if code != 2 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: C:/Local/music-ops/runs/r1/report.md") {
+		t.Fatalf("code = %d finisher = %d output = %q", code, fixture.finisher.calls, fixture.output.String())
 	}
 }
 
-func TestImportController_Run_FolderFromChooser(t *testing.T) {
+func TestImportController_Run_NoArgument_LeavesTheFolderToTheSession(t *testing.T) {
 	controller, fixture := newImportFixture(true)
 
 	code := controller.Run(context.Background(), nil)
 
-	if code != 2 || fixture.chooser.calls != 1 || fixture.service.importInputs[0].Folder != "D:/Chosen" {
+	if code != 2 || fixture.service.importInputs[0].Folder != "" {
 		t.Fatalf("code = %d inputs = %v", code, fixture.service.importInputs)
 	}
 }
 
-func TestImportController_Run_ChooserCancelled(t *testing.T) {
+func TestImportController_Run_ChoiceCancelled(t *testing.T) {
 	controller, fixture := newImportFixture(true)
-	fixture.chooser.err = importing.ErrFolderChoiceCancelled
+	fixture.service.err = importing.ErrFolderChoiceCancelled
 
 	code := controller.Run(context.Background(), nil)
 
-	if code != 0 || len(fixture.service.importInputs) != 0 || fixture.output.String() != "no folder selected\n" {
+	if code != 0 || fixture.finisher.calls != 0 || fixture.output.String() != "no folder selected\n" {
 		t.Fatalf("code = %d output = %q", code, fixture.output.String())
 	}
 }
@@ -187,15 +181,15 @@ func TestImportController_Preview(t *testing.T) {
 
 func TestImportController_PreviewErrors(t *testing.T) {
 	controller, fixture := newImportFixture(true)
-	fixture.service.err = importing.ErrOutputInsideInput
-	failingChooser, chooserFixture := newImportFixture(true)
-	chooserFixture.chooser.err = importing.ErrFolderChoiceCancelled
+	fixture.service.err = discovery.ErrOutputInsideInput
+	cancelled, cancelledFixture := newImportFixture(true)
+	cancelledFixture.service.err = importing.ErrFolderChoiceCancelled
 
 	code := controller.Preview(context.Background(), []string{"D:/In"})
-	chooserCode := failingChooser.Preview(context.Background(), nil)
+	cancelledCode := cancelled.Preview(context.Background(), nil)
 
-	if code != 1 || chooserCode != 0 || len(chooserFixture.service.previewInputs) != 0 {
-		t.Fatalf("codes = %d %d", code, chooserCode)
+	if code != 1 || cancelledCode != 0 || cancelledFixture.service.previewInputs[0].Folder != "" {
+		t.Fatalf("codes = %d %d", code, cancelledCode)
 	}
 }
 
@@ -215,9 +209,18 @@ func TestImportPresenter_SummaryGolden(t *testing.T) {
 }
 
 type steppedClock struct {
-	mutex sync.Mutex
-	now   time.Time
-	step  time.Duration
+	mutex      sync.Mutex
+	now        time.Time
+	step       time.Duration
+	ticks      chan time.Time
+	afterCalls chan struct{}
+}
+
+func (clock *steppedClock) After(time.Duration) <-chan time.Time {
+	if clock.afterCalls != nil {
+		clock.afterCalls <- struct{}{}
+	}
+	return clock.ticks
 }
 
 func (clock *steppedClock) Now() time.Time {

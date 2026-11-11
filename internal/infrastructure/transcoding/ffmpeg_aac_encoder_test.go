@@ -44,7 +44,7 @@ func TestFFmpegAACEncoder_ArgumentsGolden(t *testing.T) {
 			destination := filepath.Join(t.TempDir(), "out.audio.m4a")
 			request := conversion.EncodeRequest{Source: "in.flac", Destination: destination, Profile: audio.NewEncodingProfile(audio.EngineNative), Quality: qualityOf(t, testCase.quality[0], testCase.quality[1], testCase.quality[2])}
 
-			err := NewFFmpegAACEncoder(runner, "ffmpeg", FFmpegCapabilities{resampler: soxrResampler{}}).Encode(context.Background(), request)
+			err := NewFFmpegAACEncoder(runner, fixedTools{FFmpeg: "ffmpeg", Capabilities: FFmpegCapabilities{resampler: soxrResampler{}}}).Encode(context.Background(), request)
 
 			if diff := differences(testCase.expected("in.flac", destination+".tmp"), runner.arguments); diff != "" || err != nil {
 				t.Fatalf("arguments (-want +got):\n%s err = %v", diff, err)
@@ -60,7 +60,7 @@ func TestFFmpegAudioCopier_ArgumentsGolden(t *testing.T) {
 	runner := &outputWritingRunner{}
 	destination := filepath.Join(t.TempDir(), "out.audio.m4a")
 
-	err := NewFFmpegAudioCopier(runner, "ffmpeg").CopyAudio(context.Background(), "in.m4a", destination)
+	err := NewFFmpegAudioCopier(runner, fixedTools{FFmpeg: "ffmpeg"}).CopyAudio(context.Background(), "in.m4a", destination)
 
 	expected := []string{"-hide_banner", "-nostdin", "-y", "-i", "in.m4a", "-map", "0:a:0", "-vn", "-c:a", "copy", "-map_metadata", "-1", "-f", "mp4", "-movflags", "+faststart", destination + ".tmp"}
 	if diff := differences(expected, runner.arguments); diff != "" || err != nil || !isFile(destination) {
@@ -73,7 +73,7 @@ func TestRunToPartial_ProcessFailureRemovesPartial(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "out.m4a")
 	writeTestFile(t, destination+".tmp", "half")
 
-	err := runToPartial(context.Background(), &outputWritingRunner{err: errProcess}, "ffmpeg", []string{destination + ".tmp"}, destination)
+	err := runToPartial(context.Background(), &outputWritingRunner{err: errProcess}, process.ProcessRequest{Executable: "ffmpeg", Arguments: []string{destination + ".tmp"}}, destination)
 
 	if !errors.Is(err, errProcess) || isFile(destination+".tmp") || isFile(destination) {
 		t.Fatalf("err = %v", err)
@@ -83,7 +83,7 @@ func TestRunToPartial_ProcessFailureRemovesPartial(t *testing.T) {
 func TestRunToPartial_RenameFailure(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "missing", "out.m4a")
 
-	err := runToPartial(context.Background(), &scriptedRunner{}, "ffmpeg", []string{}, destination)
+	err := runToPartial(context.Background(), &scriptedRunner{}, process.ProcessRequest{Executable: "ffmpeg"}, destination)
 
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("err = %v", err)
@@ -111,12 +111,11 @@ func TestAACEncoderSelector(t *testing.T) {
 		name            string
 		availability    error
 		expectedProfile audio.EncodingProfile
-		expectedEngine  string
 		expectedFDK     int
 		expectedNative  int
 	}{
-		{name: "FDKAvailable_UsesFDK", expectedProfile: audio.NewEncodingProfile(audio.EngineFDK), expectedEngine: "FDK-AAC", expectedFDK: 2},
-		{name: "FDKMissing_UsesNative", availability: ErrFDKUnavailable, expectedProfile: audio.NewEncodingProfile(audio.EngineNative), expectedEngine: "ffmpeg aac", expectedNative: 2},
+		{name: "FDKAvailable_UsesFDK", expectedProfile: audio.NewEncodingProfile(audio.EngineFDK), expectedFDK: 2},
+		{name: "FDKMissing_UsesNative", availability: ErrFDKUnavailable, expectedProfile: audio.NewEncodingProfile(audio.EngineNative), expectedNative: 2},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -125,11 +124,10 @@ func TestAACEncoderSelector(t *testing.T) {
 			selector := NewAACEncoderSelector(fdk, native)
 
 			profile := selector.SelectProfile()
-			engine := selector.EngineName()
 			firstErr := selector.Encode(context.Background(), conversion.EncodeRequest{})
 			secondErr := selector.Encode(context.Background(), conversion.EncodeRequest{})
 
-			if engine != testCase.expectedEngine || profile != testCase.expectedProfile || fdk.calls != testCase.expectedFDK || native.calls != testCase.expectedNative || fdk.checks != 1 || firstErr != nil || secondErr != nil {
+			if profile != testCase.expectedProfile || fdk.calls != testCase.expectedFDK || native.calls != testCase.expectedNative || fdk.checks != 1 || firstErr != nil || secondErr != nil {
 				t.Fatalf("profile = %v fdk = %d native = %d checks = %d", profile, fdk.calls, native.calls, fdk.checks)
 			}
 		})

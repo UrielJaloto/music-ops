@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/UrielJaloto/music-ops/internal/services/importing"
 	"github.com/UrielJaloto/music-ops/internal/services/watching"
 )
 
@@ -51,13 +50,5 @@ func (controller WatchController) Execute(ctx context.Context, arguments []strin
 }
 
 func (controller WatchController) watchInput(inbox string) watching.WatchInput {
-	defaults := controller.defaults.Import
-	return watching.WatchInput{
-		Inbox:       inbox,
-		QuietPeriod: controller.defaults.QuietPeriod,
-		Import: importing.ImportInput{
-			Output: defaults.Output, Profile: defaults.Profile, Numbering: defaults.Numbering,
-			Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate,
-		},
-	}
+	return watching.WatchInput{Inbox: inbox, QuietPeriod: controller.defaults.QuietPeriod, Import: buildImportInput(controller.defaults.Import)}
 }

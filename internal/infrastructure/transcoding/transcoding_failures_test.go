@@ -32,22 +32,6 @@ func TestDetectFFmpegCapabilities_BuildConfigurationFails(t *testing.T) {
 	}
 }
 
-func TestNewestPackagedExecutable_BadPattern(t *testing.T) {
-	_, err := newestPackagedExecutable("in[valid", "ffmpeg", "ffmpeg")
-
-	if !errors.Is(err, filepath.ErrBadPattern) || !strings.Contains(err.Error(), "searching winget packages") {
-		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestCompareModTime_MissingFiles_AreEqual(t *testing.T) {
-	missing := filepath.Join(t.TempDir(), "missing")
-
-	if compareModTime(missing, missing) != 0 {
-		t.Fatal("missing files compared")
-	}
-}
-
 func TestRemoveIfPresent_FolderWithContent_Fails(t *testing.T) {
 	folder := t.TempDir()
 	writeTestFile(t, filepath.Join(folder, "inside"), "x")

@@ -1,19 +1,19 @@
 package runs
 
 import (
+	"errors"
 	"regexp"
 	"slices"
 	"time"
 
-	"github.com/UrielJaloto/music-ops/internal/domain/businesserr"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 )
 
 var (
-	ErrRunSuffixInvalid     = businesserr.NewBusinessError("run id suffix must be 4 lowercase hex characters")
-	ErrRunFolderMissing     = businesserr.NewBusinessError("run input or output folder is missing")
-	ErrRunFinishBeforeStart = businesserr.NewBusinessError("run cannot finish before it starts")
-	ErrRunAlreadyFinished   = businesserr.NewBusinessError("run already finished")
+	ErrRunSuffixInvalid     = errors.New("run id suffix must be 4 lowercase hex characters")
+	ErrRunFolderMissing     = errors.New("run input or output folder is missing")
+	ErrRunFinishBeforeStart = errors.New("run cannot finish before it starts")
+	ErrRunAlreadyFinished   = errors.New("run already finished")
 )
 
 const (

@@ -27,8 +27,18 @@ type sourcesStub struct {
 	err        error
 }
 
-func (stub sourcesStub) Discover(context.Context, discovery.DiscoverInput) (discovery.DiscoveredSources, error) {
-	return stub.discovered, stub.err
+func (stub sourcesStub) Discover(_ context.Context, input discovery.DiscoverInput) (discovery.DiscoveredSources, error) {
+	if stub.err != nil {
+		return discovery.DiscoveredSources{}, stub.err
+	}
+	input.Progress.Counted(len(stub.discovered.Tracks) + len(stub.discovered.Failed))
+	for _, track := range stub.discovered.Tracks {
+		input.Progress.Finished(track.Source.Path, false)
+	}
+	for _, failure := range stub.discovered.Failed {
+		input.Progress.Finished(failure.Path, true)
+	}
+	return stub.discovered, nil
 }
 
 type converterFake struct {
@@ -49,6 +59,7 @@ func (fake *converterFake) Convert(_ context.Context, input conversion.ConvertIn
 		if fake.omitted[track.ID] {
 			continue
 		}
+		input.Progress.Finished(track.Source, fake.failing[track.ID])
 		if fake.failing[track.ID] {
 			output.Failed = append(output.Failed, conversion.ConversionFailure{ID: track.ID, Source: track.Source, Reason: "encoder crashed"})
 			continue
@@ -65,10 +76,12 @@ func (fake *converterFake) Convert(_ context.Context, input conversion.ConvertIn
 type resolverFake struct {
 	err   error
 	calls int
+	input metadata.ResolveMetadataInput
 }
 
 func (fake *resolverFake) Resolve(_ context.Context, input metadata.ResolveMetadataInput) (metadata.ResolvedMetadata, error) {
 	fake.calls++
+	fake.input = input
 	if fake.err != nil {
 		return metadata.ResolvedMetadata{}, fake.err
 	}
@@ -328,9 +341,6 @@ func TestImportService_Import_Validation(t *testing.T) {
 	}{
 		{name: "MissingFolder_ReturnsErrFolderMissing", folder: "", output: "out", expectedError: discovery.ErrFolderMissing},
 		{name: "MissingOutput_ReturnsErrFolderMissing", folder: "in", output: " ", expectedError: discovery.ErrFolderMissing},
-		{name: "OutputInsideInput_ReturnsErrOutputInsideInput", folder: `C:\Music\In`, output: "c:/music/in/out", expectedError: ErrOutputInsideInput},
-		{name: "OutputEqualsInput_ReturnsErrOutputInsideInput", folder: "in/", output: "IN", expectedError: ErrOutputInsideInput},
-		{name: "SiblingWithSamePrefix_IsAccepted", folder: "in", output: "inbox", expectedError: nil},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -418,7 +428,7 @@ func TestImportService_Import_ProgressEventsInOrder(t *testing.T) {
 	_, err := doubles.service().Import(context.Background(), importInput())
 
 	expected := []string{
-		"start discover 0", "finish discover",
+		"start discover 0", "start discover 1", "track discover in/album/01.flac discovered", "finish discover",
 		"start convert 1", "track convert in/album/01.flac converted", "finish convert",
 		"start metadata 1", "track metadata in/album/01.flac ready", "finish metadata",
 		"start publish 1", "track publish in/album/01.flac published", "finish publish",

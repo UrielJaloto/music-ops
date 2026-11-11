@@ -48,21 +48,29 @@ func renderGenrePool() string {
 	hints := genres.GenreHints()
 	lines := make([]string, 0, len(genres.GenreNames()))
 	for _, name := range genres.GenreNames() {
-		lines = append(lines, genrePoolLine(name, subgenres[name], hints[name], slices.Contains(nationalOnly, name)))
+		entry := genrePoolEntry{name: name, hint: hints[name], subgenres: subgenres[name], isNationalOnly: slices.Contains(nationalOnly, name)}
+		lines = append(lines, entry.renderLine())
 	}
 	return strings.Join(lines, "\n")
 }
 
-func genrePoolLine(name string, subgenres []string, hint string, isNationalOnly bool) string {
-	line := "- " + name
-	if hint != "" {
-		line += " (" + hint + ")"
+type genrePoolEntry struct {
+	name           string
+	hint           string
+	subgenres      []string
+	isNationalOnly bool
+}
+
+func (entry genrePoolEntry) renderLine() string {
+	line := "- " + entry.name
+	if entry.hint != "" {
+		line += " (" + entry.hint + ")"
 	}
-	if isNationalOnly {
+	if entry.isNationalOnly {
 		line += nationalOnlyMarker
 	}
-	if len(subgenres) > 0 {
-		line += ": " + strings.Join(subgenres, subgenreListSeparator)
+	if len(entry.subgenres) > 0 {
+		line += ": " + strings.Join(entry.subgenres, subgenreListSeparator)
 	}
 	return line
 }

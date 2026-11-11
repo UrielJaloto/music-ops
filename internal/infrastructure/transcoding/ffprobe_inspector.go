@@ -41,12 +41,12 @@ type ProcessExecutor interface {
 }
 
 type FFprobeInspector struct {
-	runner     ProcessExecutor
-	executable string
+	runner ProcessExecutor
+	tools  ToolResolver
 }
 
-func NewFFprobeInspector(runner ProcessExecutor, executable string) FFprobeInspector {
-	return FFprobeInspector{runner: runner, executable: executable}
+func NewFFprobeInspector(runner ProcessExecutor, tools ToolResolver) FFprobeInspector {
+	return FFprobeInspector{runner: runner, tools: tools}
 }
 
 type probeRecord struct {
@@ -54,19 +54,23 @@ type probeRecord struct {
 	Format  probeFormatRecord   `json:"format"`
 }
 
+type probeSampleRecord struct {
+	SampleFormat     string `json:"sample_fmt"`
+	SampleRate       string `json:"sample_rate"`
+	Channels         int    `json:"channels"`
+	BitsPerRawSample string `json:"bits_per_raw_sample"`
+	BitsPerSample    int    `json:"bits_per_sample"`
+}
+
 type probeStreamRecord struct {
-	Index            int                    `json:"index"`
-	CodecName        string                 `json:"codec_name"`
-	CodecType        string                 `json:"codec_type"`
-	SampleFormat     string                 `json:"sample_fmt"`
-	SampleRate       string                 `json:"sample_rate"`
-	Channels         int                    `json:"channels"`
-	BitsPerRawSample string                 `json:"bits_per_raw_sample"`
-	BitsPerSample    int                    `json:"bits_per_sample"`
-	BitRate          string                 `json:"bit_rate"`
-	Duration         string                 `json:"duration"`
-	Disposition      probeDispositionRecord `json:"disposition"`
-	Tags             map[string]string      `json:"tags"`
+	probeSampleRecord
+	Index       int                    `json:"index"`
+	CodecName   string                 `json:"codec_name"`
+	CodecType   string                 `json:"codec_type"`
+	BitRate     string                 `json:"bit_rate"`
+	Duration    string                 `json:"duration"`
+	Disposition probeDispositionRecord `json:"disposition"`
+	Tags        map[string]string      `json:"tags"`
 }
 
 type probeDispositionRecord struct {
@@ -88,9 +92,13 @@ func (inspector FFprobeInspector) Inspect(ctx context.Context, path string) (dis
 }
 
 func (inspector FFprobeInspector) probe(ctx context.Context, path string) (probeRecord, error) {
+	tools, err := inspector.tools.ResolveTools(ctx)
+	if err != nil {
+		return probeRecord{}, fmt.Errorf("%w: %w", discovery.ErrInspectorUnavailable, err)
+	}
 	var stdout bytes.Buffer
 	request := process.ProcessRequest{
-		Executable: inspector.executable,
+		Executable: tools.FFprobe,
 		Arguments:  []string{"-v", "error", "-print_format", "json", "-show_format", "-show_streams", toProcessPath(path)},
 		Stdout:     &stdout,
 	}
