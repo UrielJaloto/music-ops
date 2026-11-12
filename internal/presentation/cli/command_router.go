@@ -9,6 +9,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 )
 
 const (
@@ -31,7 +33,7 @@ var ErrCommandLineInvalid = errors.New("command line is invalid")
 
 var helpArguments = map[string]bool{commandHelp: true, "-h": true, "--help": true}
 
-var valueFlags = []string{"out", "layout", "set"}
+var valueFlags = []string{"out", "layout", "set", "tag"}
 
 var commandsWithRawArguments = map[string]bool{CommandConfig: true}
 
@@ -53,6 +55,8 @@ flags (every command except config):
   --out <dir>                  output folder (output.dir)
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable
+  --tag key=value              write this tag on every imported track: album, genre or year;
+                               a genre skips genre classification, repeatable
   --verbose                    print detailed logs to the console
   --open                       open the report and the output folder when done
 `
@@ -67,6 +71,7 @@ type RouterRequest struct {
 	Overrides  map[string]string
 	IsVerbose  bool
 	OpensFiles bool
+	Tags       tracks.TagOverrides
 }
 
 func SelectLogOutput(request RouterRequest, errorOutput io.Writer) io.Writer {
@@ -100,12 +105,19 @@ func parseCommandFlags(request RouterRequest, arguments []string) (RouterRequest
 	layout := flags.String("layout", "", "")
 	settings := settingFlags{}
 	flags.Var(&settings, "set", "")
+	tags := settingFlags{}
+	flags.Var(&tags, "tag", "")
 	verbose := flags.Bool("verbose", false, "")
 	opensFiles := flags.Bool("open", false, "")
 	if err := flags.Parse(reorderFlags(arguments)); err != nil {
 		return RouterRequest{}, fmt.Errorf("%w: %w", ErrCommandLineInvalid, err)
 	}
+	overrides, err := tracks.NewTagOverrides(tags)
+	if err != nil {
+		return RouterRequest{}, fmt.Errorf("%w: %w", ErrCommandLineInvalid, err)
+	}
 	maps.Copy(request.Overrides, settings)
+	request.Tags = overrides
 	addOverride(request.Overrides, outputDirKey, *output)
 	addOverride(request.Overrides, outputLayoutKey, *layout)
 	request.Arguments = flags.Args()

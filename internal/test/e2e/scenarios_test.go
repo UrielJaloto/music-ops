@@ -376,3 +376,39 @@ func TestE2E_Cancellation(t *testing.T) {
 	assertNoLeftovers(t, environment.output, environment.localAppData)
 	assertInputUnchanged(t, environment.input, before)
 }
+
+func TestE2E_TagOverrides(t *testing.T) {
+	environment := newE2EEnvironment(t)
+	environment.lastfm.isFailing = true
+	environment.addInput(
+		stereo("Album/01.flac", "flac", fixtureTags{title: "First", artist: "Band", album: "Old Album"}),
+		stereo("Album/02.flac", "flac", fixtureTags{title: "Second", artist: "Band"}),
+	)
+
+	result := environment.run("run", environment.input, "--tag", "genre=rock;metal", "--tag", "album=Hybrid Theory", "--tag", "year=2000")
+
+	if result.ExitCode != 0 || result.Report.Counts["published"] != 2 || hasWarning(result.Report, "genre") {
+		t.Fatalf("result = %+v", result)
+	}
+	environment.assertTags(
+		expectedTrack{path: "in/Band - First.m4a", title: "First", artist: "Band", albumArtist: "Band", genre: "Rock; Metal", track: "1/2"},
+		expectedTrack{path: "in/Band - Second.m4a", title: "Second", artist: "Band", albumArtist: "Band", genre: "Rock; Metal", track: "2/2"},
+	)
+	for _, path := range []string{"in/Band - First.m4a", "in/Band - Second.m4a"} {
+		tags := lowerKeys(environment.probe(filepath.Join(environment.output, filepath.FromSlash(path))).Format.Tags)
+		if tags["album"] != "Hybrid Theory" || tags["date"] != "2000" {
+			t.Errorf("%s album = %q date = %q", path, tags["album"], tags["date"])
+		}
+	}
+}
+
+func TestE2E_InvalidTag_RunDoesNotStart(t *testing.T) {
+	environment := newE2EEnvironment(t)
+	environment.addInput(stereo("Album/01.flac", "flac", fixtureTags{title: "First", artist: "Band"}))
+
+	result := environment.run("run", environment.input, "--tag", "year=99")
+
+	if result.ExitCode != 1 || len(libraryFiles(t, environment.output)) != 0 {
+		t.Fatalf("result = %+v", result)
+	}
+}

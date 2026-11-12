@@ -24,10 +24,12 @@ type importSession struct {
 	timings     []StageTiming
 }
 
-func newImportSession(run *runs.Run, discovered discovery.DiscoveredSources) *importSession {
+func newImportSession(run *runs.Run, discovered discovery.DiscoveredSources, overrides tracks.TagOverrides) *importSession {
 	session := &importSession{run: run, byID: map[tracks.TrackID]*tracks.Track{}, conversions: map[tracks.TrackID]conversion.ConvertedTrack{}, timings: []StageTiming{}}
 	for _, source := range discovered.Tracks {
-		session.addTrack(source.ID, source.Source, func(*tracks.Track) error { return nil })
+		details := source.Source
+		details.Tags = overrides.Apply(details.Tags)
+		session.addTrack(source.ID, details, func(*tracks.Track) error { return nil })
 	}
 	for _, failure := range discovered.Failed {
 		session.addTrack(buildPlaceholderID(failure.Path), tracks.SourceDetails{Path: failure.Path}, func(track *tracks.Track) error {
@@ -90,7 +92,7 @@ func (session *importSession) buildMetadataInput(input ImportInput) metadata.Res
 	for _, track := range pending {
 		tracks = append(tracks, metadata.MetadataTrack{ID: track.ID(), Source: track.Source()})
 	}
-	return metadata.ResolveMetadataInput{Tracks: tracks, Numbering: input.Numbering}
+	return metadata.ResolveMetadataInput{Tracks: tracks, Numbering: input.Numbering, FixedGenre: input.Tags.Genre}
 }
 
 func (session *importSession) applyConversions(output conversion.ConvertOutput) {

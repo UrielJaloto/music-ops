@@ -89,6 +89,7 @@ type ImportInput struct {
 	Numbering     albums.NumberingMode
 	Layout        filename.Layout
 	AlbumTemplate string
+	Tags          tracks.TagOverrides
 }
 
 type ImportRow struct {
@@ -186,7 +187,7 @@ func (service ImportService) start(ctx context.Context, input ImportInput) (*imp
 	if err != nil {
 		return nil, err
 	}
-	session := newImportSession(run, discovered)
+	session := newImportSession(run, discovered, input.Tags)
 	session.recordTiming(StageDiscover, service.runtime.Now().Sub(startedAt))
 	return session, nil
 }

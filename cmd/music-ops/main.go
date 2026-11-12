@@ -206,7 +206,7 @@ func (app application) buildMetadata(graph parts) metadata.MetadataService {
 func (app application) buildImportDefaults(graph parts) cli.ImportDefaults {
 	return cli.ImportDefaults{
 		Output: app.config.Output.Dir, Profile: graph.encoding.selector, Numbering: app.config.ParseNumbering(),
-		Layout: app.config.ParseLayout(), AlbumTemplate: app.config.Output.AlbumTemplate,
+		Layout: app.config.ParseLayout(), AlbumTemplate: app.config.Output.AlbumTemplate, Tags: app.request.Tags,
 	}
 }
 

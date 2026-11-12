@@ -13,6 +13,7 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
 	"github.com/UrielJaloto/music-ops/internal/domain/runs"
+	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/discovery"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
@@ -52,7 +53,7 @@ func (spy *finisherSpy) Finish(context.Context, importing.ImportOutput) error {
 }
 
 func testDefaults() ImportDefaults {
-	return ImportDefaults{Output: "E:/Music", Profile: fixedProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}"}
+	return ImportDefaults{Output: "E:/Music", Profile: fixedProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}", Tags: tracks.TagOverrides{Album: "Fixed", Genre: "Rock"}}
 }
 
 type reporterStub struct {
@@ -90,7 +91,7 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 
 	code := NewRunCommand(controller).Execute(context.Background(), []string{"D:/In"})
 
-	expected := importing.ImportInput{Folder: "D:/In", Output: "E:/Music", Profile: audio.NewEncodingProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}"}
+	expected := importing.ImportInput{Folder: "D:/In", Output: "E:/Music", Profile: audio.NewEncodingProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}", Tags: tracks.TagOverrides{Album: "Fixed", Genre: "Rock"}}
 	if diff := differences([]importing.ImportInput{expected}, fixture.service.importInputs); diff != "" {
 		t.Fatalf("input (-want +got):\n%s", diff)
 	}

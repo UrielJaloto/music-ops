@@ -486,6 +486,23 @@ func TestImportService_Import_KeepSourceWithoutNumber_FailsGroup(t *testing.T) {
 	}
 }
 
+func TestImportService_Import_TagOverrides_AppliedToEveryTrack(t *testing.T) {
+	doubles := newImportDoubles(t)
+	input := importInput()
+	input.Tags = tracks.TagOverrides{Album: "New Album", Genre: "Rock", Year: "2001"}
+
+	_, err := doubles.service().Import(context.Background(), input)
+
+	if err != nil || doubles.resolver.input.FixedGenre != "Rock" || len(doubles.publisher.published) == 0 {
+		t.Fatalf("fixed genre = %q published = %d err = %v", doubles.resolver.input.FixedGenre, len(doubles.publisher.published), err)
+	}
+	for _, request := range doubles.publisher.published {
+		if request.Metadata.Album != "New Album" || request.Metadata.Date != "2001" {
+			t.Fatalf("metadata = %+v", request.Metadata)
+		}
+	}
+}
+
 func TestImportService_Import_UnknownTemplate_FailsTargets(t *testing.T) {
 	doubles := newImportDoubles(t)
 	input := importInput()

@@ -16,5 +16,7 @@ flags (every command except config):
   --out <dir>                  output folder (output.dir)
   --layout flat|album_folders  output layout (output.layout)
   --set key=value              override any setting, repeatable
+  --tag key=value              write this tag on every imported track: album, genre or year;
+                               a genre skips genre classification, repeatable
   --verbose                    print detailed logs to the console
   --open                       open the report and the output folder when done

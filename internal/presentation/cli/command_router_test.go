@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/genres"
+	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
 	"github.com/UrielJaloto/music-ops/internal/services/discovery"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
@@ -116,6 +117,11 @@ func TestParseCommandLine_Flags(t *testing.T) {
 		expected  RouterRequest
 	}{
 		{
+			name:      "TagsForEveryTrack",
+			arguments: []string{"run", "D:/In", "--tag", "album=Hybrid Theory", "--tag", "genre=rock; metal", "--tag", "year=2000"},
+			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{}, Tags: tracks.TagOverrides{Album: "Hybrid Theory", Genre: "Rock; Metal", Year: "2000"}},
+		},
+		{
 			name:      "OutAndLayout",
 			arguments: []string{"run", "D:/In", "--out", "E:/Music", "--layout", "album_folders"},
 			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{"output.dir": "E:/Music", "output.layout": "album_folders"}},
@@ -164,6 +170,10 @@ func TestParseCommandLine_Flags(t *testing.T) {
 
 func TestParseCommandLine_InvalidFlags(t *testing.T) {
 	cases := [][]string{
+		{"run", "--tag", "artist=X"},
+		{"run", "--tag", "year=99"},
+		{"run", "--tag", "genre=Nu Metal"},
+		{"run", "--tag", "album"},
 		{"run", "--set", "no-divider"},
 		{"run", "--set", "=value"},
 		{"run", "--color"},
@@ -196,6 +206,10 @@ func TestErrorPresenter_Present(t *testing.T) {
 		{err: diagnostics.ErrLocalAdvisorNotInstalled, expectedMessage: "the local advisor is not installed; run: music-ops advisor install", expectedCode: 1},
 		{err: diagnostics.ErrLastFMKeyInvalid, expectedMessage: "the Last.fm API key is invalid; run: music-ops config set lastfm.api_key <key>", expectedCode: 1},
 		{err: ErrCommandLineInvalid, expectedMessage: "invalid command line; run: music-ops help", expectedCode: 1},
+		{err: fmt.Errorf("%w: %w", ErrCommandLineInvalid, tracks.ErrTagUnknown), expectedMessage: "unknown tag; use album, genre or year", expectedCode: 1},
+		{err: tracks.ErrTagValueMissing, expectedMessage: "a tag value is empty", expectedCode: 1},
+		{err: tracks.ErrYearInvalid, expectedMessage: "the year must have four digits", expectedCode: 1},
+		{err: genres.ErrGenreFormatInvalid, expectedMessage: `the genre must be "Genre" or "Genre; Subgenre"`, expectedCode: 1},
 		{err: genres.ErrGenreNotInPool, expectedMessage: "unknown genre; use one of: " + strings.Join(genres.GenreNames(), ", "), expectedCode: 1},
 		{err: genres.ErrSubgenreNotInGenre, expectedMessage: "unknown sub-genre for that genre; sub-genres: Rock (Metal, Punk), Rap (Rap Acústico), Electronic (Dance, House, Ambient), Funk BR (Funk Carioca, Melódico, Remix, Afrobeats)", expectedCode: 1},
 		{err: fmt.Errorf("opening library: %w", importing.ErrRunInProgress), expectedMessage: "another music-ops run is in progress", expectedCode: 1},

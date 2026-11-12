@@ -2,6 +2,7 @@ package genres
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 
 var (
 	ErrGenreNotInPool     = errors.New("genre is not in the pool")
+	ErrGenreFormatInvalid = errors.New(`genre must be "Genre" or "Genre; Subgenre"`)
 	ErrSubgenreNotInGenre = errors.New("subgenre does not belong to the genre")
 )
 
@@ -123,6 +125,37 @@ func NewClassification(details ClassificationDetails) (Classification, error) {
 		return Classification{}, ErrSubgenreNotInGenre
 	}
 	return Classification{genre: details.Genre, subgenre: details.Subgenre, isBrazilian: details.IsBrazilian, isKnown: true}, nil
+}
+
+func ParseGenre(value string) (Classification, error) {
+	parts := strings.Split(value, genreJoinSeparator[:1])
+	if len(parts) > 2 {
+		return Classification{}, fmt.Errorf("%w: %q", ErrGenreFormatInvalid, value)
+	}
+	name, isBrazilian := cutNationalSuffix(parts[0])
+	index := slices.IndexFunc(genrePool, func(definition genreDefinition) bool { return strings.EqualFold(definition.name, name) })
+	if index < 0 {
+		return Classification{}, fmt.Errorf("%w: %q", ErrGenreNotInPool, name)
+	}
+	definition, subgenre := genrePool[index], ""
+	if len(parts) == 2 {
+		name, _ := cutNationalSuffix(parts[1])
+		position := slices.IndexFunc(definition.subgenres, func(candidate string) bool { return strings.EqualFold(candidate, name) })
+		if position < 0 {
+			return Classification{}, fmt.Errorf("%w: %q", ErrSubgenreNotInGenre, name)
+		}
+		subgenre = definition.subgenres[position]
+	}
+	return NewClassification(ClassificationDetails{Genre: definition.name, Subgenre: subgenre, IsBrazilian: isBrazilian, IsKnown: true})
+}
+
+func cutNationalSuffix(value string) (string, bool) {
+	trimmed := strings.Join(strings.Fields(value), " ")
+	suffix := nationalSuffixSpace + NationalSuffix
+	if len(trimmed) > len(suffix) && strings.EqualFold(trimmed[len(trimmed)-len(suffix):], suffix) {
+		return trimmed[:len(trimmed)-len(suffix)], true
+	}
+	return trimmed, false
 }
 
 func NewUnknownClassification() Classification {

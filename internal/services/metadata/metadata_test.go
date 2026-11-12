@@ -108,6 +108,33 @@ func TestMetadataService_Resolve_UntaggedTrack_TitleFromFileName(t *testing.T) {
 	}
 }
 
+func TestMetadataService_Resolve_FixedGenre_SkipsClassifier(t *testing.T) {
+	doubles := metadataFixture(t)
+	input := metadataInput()
+	input.FixedGenre = "Rock; Metal"
+
+	resolved, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+
+	if err != nil || !slices.Equal(doubles.recorder.calls, []string{"credits"}) {
+		t.Fatalf("calls = %v err = %v", doubles.recorder.calls, err)
+	}
+	if len(resolved.Tracks) != 1 || resolved.Tracks[0].Classification.Genre().String() != "Rock; Metal" || slices.Contains(resolved.Warnings, "genre warning") {
+		t.Fatalf("resolved = %+v", resolved)
+	}
+}
+
+func TestMetadataService_Resolve_FixedGenreNotInPool_ReturnsError(t *testing.T) {
+	doubles := metadataFixture(t)
+	input := metadataInput()
+	input.FixedGenre = "Nu Metal"
+
+	_, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+
+	if !errors.Is(err, genres.ErrGenreNotInPool) || slices.Contains(doubles.recorder.calls, "genres") {
+		t.Fatalf("calls = %v err = %v", doubles.recorder.calls, err)
+	}
+}
+
 func TestMetadataService_Resolve_CreditFailure_PropagatesAsFailedTrack(t *testing.T) {
 	doubles := metadataFixture(t)
 	credits, genres := doubles.credits, doubles.genres

@@ -26,8 +26,9 @@ type MetadataTrack struct {
 }
 
 type ResolveMetadataInput struct {
-	Tracks    []MetadataTrack
-	Numbering albums.NumberingMode
+	Tracks     []MetadataTrack
+	Numbering  albums.NumberingMode
+	FixedGenre string
 }
 
 type ResolvedTrack struct {
@@ -63,7 +64,7 @@ func (service MetadataService) Resolve(ctx context.Context, input ResolveMetadat
 		return ResolvedMetadata{}, fmt.Errorf("normalizing credits: %w", err)
 	}
 	genreTracks := toGenreTracks(input.Tracks, normalized.Credits)
-	classified, err := service.classify(ctx, genreTracks)
+	classified, err := service.classify(ctx, genreTracks, input.FixedGenre)
 	if err != nil {
 		return ResolvedMetadata{}, err
 	}
@@ -74,12 +75,23 @@ func (service MetadataService) Resolve(ctx context.Context, input ResolveMetadat
 	}, nil
 }
 
-func (service MetadataService) classify(ctx context.Context, genreTracks []classification.GenreTrack) (classification.ClassifiedGenres, error) {
-	classified, err := service.genres.Classify(ctx, classification.ClassifyGenresInput{Tracks: genreTracks})
-	if err != nil {
-		return classification.ClassifiedGenres{}, fmt.Errorf("classifying genres: %w", err)
+func (service MetadataService) classify(ctx context.Context, genreTracks []classification.GenreTrack, fixedGenre string) (classification.ClassifiedGenres, error) {
+	if fixedGenre == "" {
+		classified, err := service.genres.Classify(ctx, classification.ClassifyGenresInput{Tracks: genreTracks})
+		if err != nil {
+			return classification.ClassifiedGenres{}, fmt.Errorf("classifying genres: %w", err)
+		}
+		return classified, nil
 	}
-	return classified, nil
+	fixed, err := genres.ParseGenre(fixedGenre)
+	if err != nil {
+		return classification.ClassifiedGenres{}, err
+	}
+	classifications := make(map[tracks.TrackID]genres.Classification, len(genreTracks))
+	for _, track := range genreTracks {
+		classifications[track.ID] = fixed
+	}
+	return classification.ClassifiedGenres{Classifications: classifications}, nil
 }
 
 func toCreditTracks(tracks []MetadataTrack) []crediting.CreditTrack {

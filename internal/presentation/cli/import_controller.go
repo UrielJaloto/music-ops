@@ -6,6 +6,7 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
+	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
 
@@ -43,6 +44,7 @@ type ImportDefaults struct {
 	Numbering     albums.NumberingMode
 	Layout        filename.Layout
 	AlbumTemplate string
+	Tags          tracks.TagOverrides
 }
 
 type ImportServices struct {
@@ -114,7 +116,7 @@ func (controller ImportController) buildImportInput(arguments []string) importin
 func buildImportInput(defaults ImportDefaults) importing.ImportInput {
 	return importing.ImportInput{
 		Output: defaults.Output, Profile: defaults.Profile.SelectProfile(),
-		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate,
+		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate, Tags: defaults.Tags,
 	}
 }
 

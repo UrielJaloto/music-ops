@@ -135,3 +135,36 @@ func TestGenreSubgenres(t *testing.T) {
 		t.Fatalf("subgenres = %v", fresh)
 	}
 }
+
+func TestParseGenre(t *testing.T) {
+	cases := []struct {
+		name          string
+		value         string
+		expected      string
+		expectedError error
+	}{
+		{name: "MainOnly", value: "Rock", expected: "Rock"},
+		{name: "CaseAndSpacesNormalized", value: "  rock ;metal ", expected: "Rock; Metal"},
+		{name: "NationalSuffix", value: "rap nacional; rap acústico nacional", expected: "Rap Nacional; Rap Acústico Nacional"},
+		{name: "NationalOnlyGenre", value: "funk br; funk carioca", expected: "Funk BR; Funk Carioca"},
+		{name: "SlashName", value: "indie / alternative", expected: "Indie / Alternative"},
+		{name: "UnknownGenre", value: "Nu Metal", expectedError: ErrGenreNotInPool},
+		{name: "OnlySuffix", value: "Nacional", expectedError: ErrGenreNotInPool},
+		{name: "Blank", value: " ", expectedError: ErrGenreNotInPool},
+		{name: "SubgenreOfAnotherGenre", value: "Rock; House", expectedError: ErrSubgenreNotInGenre},
+		{name: "EmptySubgenre", value: "Rock;", expectedError: ErrSubgenreNotInGenre},
+		{name: "TooManyParts", value: "Rock; Metal; Punk", expectedError: ErrGenreFormatInvalid},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			classification, err := ParseGenre(testCase.value)
+
+			if !errors.Is(err, testCase.expectedError) {
+				t.Fatalf("err = %v, want %v", err, testCase.expectedError)
+			}
+			if err == nil && (!classification.IsKnown() || classification.Genre().String() != testCase.expected) {
+				t.Fatalf("genre = %q", classification.Genre().String())
+			}
+		})
+	}
+}
