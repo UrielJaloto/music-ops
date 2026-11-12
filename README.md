@@ -222,7 +222,7 @@ Merged statement coverage of the unit, integration and end-to-end runs is 99.9 %
 | Local model through llama-server with JSON-schema output | Private, free to run, and its answers can be parsed and validated |
 | Model answers validated against the source | Every artist must appear in the source tags or path, so the model cannot invent names |
 | bbolt for cache and journal | Embedded, transactional, one file; makes runs resumable and repeat runs free |
-| Staging next to the library, then rename | Finished files appear atomically and the library never holds partial output |
+| Conversion in a staging folder, then move | Interrupted conversions never reach the library; a move to another drive falls back to copy and delete |
 | Interfaces declared by the consumer | Services stay testable with small stubs and never depend on infrastructure |
 
 Tech stack: Go 1.26, ffmpeg and ffprobe, FDK-AAC, llama.cpp with a Qwen GGUF model, Last.fm API, [bbolt](https://github.com/etcd-io/bbolt), [go-mp4](https://github.com/abema/go-mp4), [fsnotify](https://github.com/fsnotify/fsnotify), [sqweek/dialog](https://github.com/sqweek/dialog), [x/sync](https://pkg.go.dev/golang.org/x/sync).
