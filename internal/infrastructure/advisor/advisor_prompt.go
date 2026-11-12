@@ -38,16 +38,16 @@ func BuildCreditSystemPrompt() string {
 	return creditSystemPrompt
 }
 
-func BuildGenreSystemPrompt() string {
-	return strings.Replace(genreSystemPromptTemplate, genrePoolPlaceholder, renderGenrePool(), 1)
+func BuildGenreSystemPrompt(catalog genres.Pool) string {
+	return strings.Replace(genreSystemPromptTemplate, genrePoolPlaceholder, renderGenrePool(catalog), 1)
 }
 
-func renderGenrePool() string {
-	nationalOnly := genres.NationalOnlyGenreNames()
-	subgenres := genres.GenreSubgenres()
-	hints := genres.GenreHints()
-	lines := make([]string, 0, len(genres.GenreNames()))
-	for _, name := range genres.GenreNames() {
+func renderGenrePool(catalog genres.Pool) string {
+	nationalOnly := catalog.ListNationalOnlyNames()
+	subgenres := catalog.ListSubgenres()
+	hints := catalog.ListHints()
+	lines := make([]string, 0, len(catalog.ListNames()))
+	for _, name := range catalog.ListNames() {
 		entry := genrePoolEntry{name: name, hint: hints[name], subgenres: subgenres[name], isNationalOnly: slices.Contains(nationalOnly, name)}
 		lines = append(lines, entry.renderLine())
 	}
@@ -83,11 +83,11 @@ func BuildCreditSchema() map[string]any {
 	}, []string{"key", "title", "artists"})
 }
 
-func BuildGenreSchema() map[string]any {
+func BuildGenreSchema(catalog genres.Pool) map[string]any {
 	return buildItemsSchema(map[string]any{
 		"key":          buildStringSchema(),
-		"genre":        map[string]any{"type": "string", "enum": genres.GenreNames()},
-		"subgenre":     map[string]any{"type": "string", "enum": append(genres.SubgenreNames(), "")},
+		"genre":        map[string]any{"type": "string", "enum": catalog.ListNames()},
+		"subgenre":     map[string]any{"type": "string", "enum": append(catalog.ListSubgenreNames(), "")},
 		"is_brazilian": map[string]any{"type": "boolean"},
 		"is_known":     map[string]any{"type": "boolean"},
 	}, []string{"key", "genre", "subgenre", "is_brazilian", "is_known"})
@@ -107,8 +107,15 @@ func buildItemsSchema(properties map[string]any, required []string) map[string]a
 	}
 }
 
-func PromptFingerprint() string {
-	material := AdvisorPromptVersion + BuildCreditSystemPrompt() + BuildGenreSystemPrompt() + fmt.Sprint(BuildCreditSchema()) + fmt.Sprint(BuildGenreSchema())
+func FingerprintCreditPrompt() string {
+	return fingerprint(AdvisorPromptVersion + BuildCreditSystemPrompt() + fmt.Sprint(BuildCreditSchema()))
+}
+
+func FingerprintGenrePrompt(catalog genres.Pool) string {
+	return fingerprint(AdvisorPromptVersion + BuildGenreSystemPrompt(catalog) + fmt.Sprint(BuildGenreSchema(catalog)))
+}
+
+func fingerprint(material string) string {
 	digest := sha256.Sum256([]byte(material))
 	return hex.EncodeToString(digest[:])[:fingerprintLength]
 }

@@ -12,7 +12,7 @@ func TestTagTargets_AreValidInPool(t *testing.T) {
 	for tag, target := range tagTargets {
 		details := ClassificationDetails{Genre: target.genre, Subgenre: target.subgenre, IsKnown: true}
 
-		if _, err := NewClassification(details); err != nil {
+		if _, err := NewDefaultPool().NewClassification(details); err != nil {
 			t.Errorf("tag %q maps to invalid target %+v: %v", tag, target, err)
 		}
 	}
@@ -49,7 +49,7 @@ func TestClassifyByTags(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			classification := ClassifyByTags(NewTagEvidence(testCase.tags))
+			classification := NewDefaultPool().ClassifyByTags(NewTagEvidence(testCase.tags))
 
 			if got := classification.Genre().String(); got != testCase.expected {
 				t.Fatalf("genre = %q, want %q", got, testCase.expected)

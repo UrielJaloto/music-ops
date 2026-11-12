@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
@@ -42,8 +41,10 @@ var errorMessages = []errorMessage{
 	{target: tracks.ErrTagValueMissing, message: "a tag value is empty", code: exitFailure},
 	{target: tracks.ErrYearInvalid, message: "the year must have four digits", code: exitFailure},
 	{target: genres.ErrGenreFormatInvalid, message: `the genre must be "Genre" or "Genre; Subgenre"`, code: exitFailure},
-	{target: genres.ErrGenreNotInPool, message: "unknown genre; use one of: " + strings.Join(genres.GenreNames(), ", "), code: exitFailure},
-	{target: genres.ErrSubgenreNotInGenre, message: "unknown sub-genre for that genre; sub-genres: " + subgenreList(), code: exitFailure},
+	{target: genres.ErrGenreNotInPool, code: exitFailure},
+	{target: genres.ErrSubgenreNotInGenre, code: exitFailure},
+	{target: genres.ErrGenreDefinitionInvalid, code: exitFailure},
+	{target: genres.ErrGenrePoolEmpty, code: exitFailure},
 	{target: ErrCommandLineInvalid, message: "invalid command line; run: music-ops help", code: exitFailure},
 }
 
@@ -66,21 +67,15 @@ func (presenter ErrorPresenter) Present(err error) int {
 	return code
 }
 
-func subgenreList() string {
-	groups := []string{}
-	for _, name := range genres.GenreNames() {
-		if subgenres := genres.GenreSubgenres()[name]; len(subgenres) > 0 {
-			groups = append(groups, name+" ("+strings.Join(subgenres, ", ")+")")
-		}
-	}
-	return strings.Join(groups, ", ")
-}
-
 func describeError(err error) (string, int) {
 	for _, candidate := range errorMessages {
-		if errors.Is(err, candidate.target) {
-			return candidate.message, candidate.code
+		if !errors.Is(err, candidate.target) {
+			continue
 		}
+		if candidate.message == "" {
+			return err.Error(), candidate.code
+		}
+		return candidate.message, candidate.code
 	}
 	return genericMessage + ": " + err.Error(), exitFailure
 }

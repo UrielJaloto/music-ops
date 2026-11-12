@@ -297,7 +297,7 @@ func mustArtists(t *testing.T, artists ...string) credits.ArtistCredit {
 
 func mustClassification(t *testing.T, details genres.ClassificationDetails) genres.Classification {
 	t.Helper()
-	classification, err := genres.NewClassification(details)
+	classification, err := genres.NewDefaultPool().NewClassification(details)
 	if err != nil {
 		t.Fatalf("building classification %+v: %v", details, err)
 	}

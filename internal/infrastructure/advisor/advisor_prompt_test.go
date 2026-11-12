@@ -3,9 +3,11 @@ package advisor
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
@@ -38,9 +40,9 @@ func TestAdvisorPrompts_Golden(t *testing.T) {
 		actual func(t *testing.T) string
 	}{
 		{golden: "advisor_credit_system.golden", actual: func(*testing.T) string { return BuildCreditSystemPrompt() }},
-		{golden: "advisor_genre_system.golden", actual: func(*testing.T) string { return BuildGenreSystemPrompt() }},
+		{golden: "advisor_genre_system.golden", actual: func(*testing.T) string { return BuildGenreSystemPrompt(genres.NewDefaultPool()) }},
 		{golden: "advisor_credit_schema.json", actual: func(t *testing.T) string { return indentedJSON(t, BuildCreditSchema()) }},
-		{golden: "advisor_genre_schema.json", actual: func(t *testing.T) string { return indentedJSON(t, BuildGenreSchema()) }},
+		{golden: "advisor_genre_schema.json", actual: func(t *testing.T) string { return indentedJSON(t, BuildGenreSchema(genres.NewDefaultPool())) }},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.golden, func(t *testing.T) {
@@ -52,16 +54,16 @@ func TestAdvisorPrompts_Golden(t *testing.T) {
 }
 
 func TestBuildGenreSchema_EnumsEqualDomainLists(t *testing.T) {
-	item := BuildGenreSchema()["properties"].(map[string]any)["items"].(map[string]any)["items"].(map[string]any)
+	item := BuildGenreSchema(genres.NewDefaultPool())["properties"].(map[string]any)["items"].(map[string]any)["items"].(map[string]any)
 	properties := item["properties"].(map[string]any)
 
 	genreEnum := properties["genre"].(map[string]any)["enum"]
 	subgenres := properties["subgenre"].(map[string]any)["enum"]
 
-	if diff := differences(genres.GenreNames(), genreEnum); diff != "" {
+	if diff := differences(genres.NewDefaultPool().ListNames(), genreEnum); diff != "" {
 		t.Fatalf("genres (-want +got):\n%s", diff)
 	}
-	if diff := differences(append(genres.SubgenreNames(), ""), subgenres); diff != "" {
+	if diff := differences(append(genres.NewDefaultPool().ListSubgenreNames(), ""), subgenres); diff != "" {
 		t.Fatalf("subgenres (-want +got):\n%s", diff)
 	}
 	if item["additionalProperties"] != false || len(item["required"].([]string)) != 5 {
@@ -70,9 +72,9 @@ func TestBuildGenreSchema_EnumsEqualDomainLists(t *testing.T) {
 }
 
 func TestBuildGenreSystemPrompt_ListsWholePool(t *testing.T) {
-	prompt := BuildGenreSystemPrompt()
+	prompt := BuildGenreSystemPrompt(genres.NewDefaultPool())
 
-	for _, name := range genres.GenreNames() {
+	for _, name := range genres.NewDefaultPool().ListNames() {
 		if !regexp.MustCompile(`(?m)^- ` + regexp.QuoteMeta(name) + `\b`).MatchString(prompt) {
 			t.Fatalf("genre %s missing from prompt", name)
 		}
@@ -82,11 +84,36 @@ func TestBuildGenreSystemPrompt_ListsWholePool(t *testing.T) {
 	}
 }
 
-func TestPromptFingerprint(t *testing.T) {
-	fingerprint := PromptFingerprint()
+func TestPromptFingerprints(t *testing.T) {
+	custom, err := genres.NewPool([]genres.GenreDefinition{{Name: "Lo-Fi"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credit := FingerprintCreditPrompt()
+	genre := FingerprintGenrePrompt(genres.NewDefaultPool())
 
-	if !regexp.MustCompile(`^[0-9a-f]{12}$`).MatchString(fingerprint) || fingerprint != PromptFingerprint() {
-		t.Fatalf("fingerprint = %s", fingerprint)
+	if !regexp.MustCompile(`^[0-9a-f]{12}$`).MatchString(credit) || credit != FingerprintCreditPrompt() || genre == credit {
+		t.Fatalf("credit = %s genre = %s", credit, genre)
+	}
+	if genre != FingerprintGenrePrompt(genres.NewDefaultPool()) || genre == FingerprintGenrePrompt(custom) {
+		t.Fatal("ChangingThePool_ChangesTheGenreFingerprint")
+	}
+}
+
+func TestBuildGenreSystemPrompt_CustomPool(t *testing.T) {
+	custom, err := genres.NewPool([]genres.GenreDefinition{{Name: "Lo-Fi", Hint: "chill beats"}, {Name: "Sertanejo", Subgenres: []string{"Universitário"}, IsNationalOnly: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	prompt := BuildGenreSystemPrompt(custom)
+	enum := BuildGenreSchema(custom)["properties"].(map[string]any)["items"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["genre"].(map[string]any)["enum"]
+
+	if !strings.Contains(prompt, "- Lo-Fi (chill beats)\n- Sertanejo (national-only): Universitário") || strings.Contains(prompt, "- Rock") {
+		t.Fatalf("prompt = %s", prompt)
+	}
+	if fmt.Sprint(enum) != "[Lo-Fi Sertanejo]" {
+		t.Fatalf("enum = %v", enum)
 	}
 }
 

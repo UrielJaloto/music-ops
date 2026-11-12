@@ -45,7 +45,7 @@ type evalCandidate struct {
 }
 
 var evalCandidates = []evalCandidate{
-	{name: "Qwen3.5-9B Q4_K_M", artifact: artifacts.BuildAdvisorModelArtifact()},
+	{name: "Qwen3.5-9B Q4_K_M", artifact: artifacts.AdvisorModelArtifact()},
 	{name: "Qwen3.5-4B Q8_0", artifact: setup.ArtifactRequest{
 		Name:      "Qwen3.5-4B-Q8_0.gguf",
 		URL:       "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q8_0.gguf",
@@ -69,7 +69,7 @@ func prepareEvalArtifacts(t *testing.T, cache string) {
 	downloader := artifacts.NewHTTPArtifactDownloader(&http.Client{}, silentProgress{})
 	runtime := filepath.Join(cache, "llama.cpp")
 	if _, err := os.Stat(filepath.Join(runtime, artifacts.AdvisorServerExecutable)); err != nil {
-		for _, artifact := range artifacts.BuildAdvisorRuntimeArtifacts() {
+		for _, artifact := range artifacts.AdvisorRuntimeArtifacts() {
 			archive := filepath.Join(cache, artifact.Name)
 			if err := downloader.Download(context.Background(), artifact, archive); err != nil {
 				t.Fatal(err)
@@ -248,7 +248,7 @@ func runGenreBatches(t *testing.T, advisor LlamaAdvisor, cases []genreCase) (map
 			continue
 		}
 		for _, suggestion := range suggestions {
-			if !ValidGenreSuggestion(classification.GenreRequest{}, suggestion) {
+			if !GenreSuggestionValidator(genres.DefaultPool())(classification.GenreRequest{}, suggestion) {
 				rejected++
 				continue
 			}
@@ -275,7 +275,7 @@ func runCreditBatches(t *testing.T, advisor LlamaAdvisor, cases []creditCase) (m
 			continue
 		}
 		for _, suggestion := range suggestions {
-			if !IsValidCreditSuggestion(byKey[suggestion.Key], suggestion) {
+			if !ValidCreditSuggestion(byKey[suggestion.Key], suggestion) {
 				rejected++
 				continue
 			}
@@ -289,7 +289,7 @@ func scoreGenres(result *evalResult, cases []genreCase, answers map[string]class
 	exact, main, brazilian := 0, 0, 0
 	for _, item := range cases {
 		suggestion := answers[item.request.Key]
-		classification, err := genres.NewClassification(genres.ClassificationDetails{Genre: suggestion.Genre, Subgenre: suggestion.Subgenre, IsBrazilian: suggestion.IsBrazilian, IsKnown: suggestion.IsKnown})
+		classification, err := genres.DefaultPool().NewClassification(genres.ClassificationDetails{Genre: suggestion.Genre, Subgenre: suggestion.Subgenre, IsBrazilian: suggestion.IsBrazilian, IsKnown: suggestion.IsKnown})
 		if err != nil {
 			continue
 		}
@@ -315,7 +315,7 @@ func mainGenre(genre string) string {
 }
 
 func isBrazilianGenre(genre string) bool {
-	return strings.Contains(genre, "Nacional") || slices.Contains(genres.NationalOnlyGenreNames(), mainGenre(genre))
+	return strings.Contains(genre, "Nacional") || slices.Contains(genres.DefaultPool().ListNationalOnlyNames(), mainGenre(genre))
 }
 
 func scoreCredits(cases []creditCase, answers map[string]crediting.CreditSuggestion) float64 {

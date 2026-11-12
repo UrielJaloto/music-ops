@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/crediting"
 )
@@ -130,9 +131,25 @@ func TestGenreService_Classify(t *testing.T) {
 	}
 }
 
+func TestGenreService_Classify_CustomPool(t *testing.T) {
+	catalog, err := genres.NewPool([]genres.GenreDefinition{{Name: "Lo-Fi"}, {Name: "Rock", Subgenres: []string{"Grunge"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := genreTrack(t, "a1", "Artist", "One"), genreTrack(t, "a2", "Artist", "Two")
+	tags := &tagSourceSpy{trackTags: map[string][]string{"Artist|Two": {"pop", "grunge"}}}
+	advisor := &genreAdvisorStub{suggestions: []GenreSuggestion{{Key: "a1", Genre: "Lo-Fi", IsKnown: true}, {Key: "a2", Genre: "Pop", IsKnown: true}}}
+
+	classified, err := NewGenreService(tags, advisor, sequentialPool{}, catalog, 40).Classify(context.Background(), ClassifyGenresInput{Tracks: []GenreTrack{first, second}})
+
+	if err != nil || classified.Classifications["a1"].Genre().String() != "Lo-Fi" || classified.Classifications["a2"].Genre().String() != "Rock" {
+		t.Fatalf("classified = %+v err = %v", classified, err)
+	}
+}
+
 func runGenreCase(t *testing.T, testCase genreCase) {
 	t.Helper()
-	service := NewGenreService(testCase.tags, testCase.advisor, sequentialPool{}, 40)
+	service := NewGenreService(testCase.tags, testCase.advisor, sequentialPool{}, genres.NewDefaultPool(), 40)
 
 	classified, err := service.Classify(context.Background(), ClassifyGenresInput{Tracks: testCase.tracks})
 	if err != nil {
@@ -154,7 +171,7 @@ func runGenreCase(t *testing.T, testCase genreCase) {
 func TestGenreService_RequestsCarryTagsAndArtists(t *testing.T) {
 	advisor := &genreAdvisorStub{}
 	tags := &tagSourceSpy{trackTags: map[string][]string{"Queen|Bohemian Rhapsody": {"Rock", "Classic Rock"}}}
-	service := NewGenreService(tags, advisor, sequentialPool{}, 1)
+	service := NewGenreService(tags, advisor, sequentialPool{}, genres.NewDefaultPool(), 1)
 
 	_, err := service.Classify(context.Background(), ClassifyGenresInput{Tracks: []GenreTrack{genreTrack(t, "q1", "Queen", "Bohemian Rhapsody")}})
 
@@ -171,7 +188,7 @@ func TestGenreService_BatchSize(t *testing.T) {
 	}{{0, crediting.ErrBatchSizeOutOfRange}, {1, nil}, {200, nil}, {201, crediting.ErrBatchSizeOutOfRange}}
 	for _, testCase := range cases {
 		t.Run(fmt.Sprint(testCase.size), func(t *testing.T) {
-			service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, sequentialPool{}, testCase.size)
+			service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, sequentialPool{}, genres.NewDefaultPool(), testCase.size)
 
 			_, err := service.Classify(context.Background(), ClassifyGenresInput{})
 
@@ -186,7 +203,7 @@ func TestGenreService_SplitsAdvisorBatches(t *testing.T) {
 	advisor := &genreAdvisorStub{}
 	tracks := []GenreTrack{genreTrack(t, "a", "A", "1"), genreTrack(t, "b", "B", "2"), genreTrack(t, "c", "C", "3")}
 
-	_, err := NewGenreService(&tagSourceSpy{}, advisor, sequentialPool{}, 2).Classify(context.Background(), ClassifyGenresInput{Tracks: tracks})
+	_, err := NewGenreService(&tagSourceSpy{}, advisor, sequentialPool{}, genres.NewDefaultPool(), 2).Classify(context.Background(), ClassifyGenresInput{Tracks: tracks})
 
 	if err != nil || len(advisor.requests) != 2 || len(advisor.requests[1]) != 1 {
 		t.Fatalf("batches = %d err = %v", len(advisor.requests), err)
@@ -194,7 +211,7 @@ func TestGenreService_SplitsAdvisorBatches(t *testing.T) {
 }
 
 func TestGenreService_Cancelled_ReturnsContextError(t *testing.T) {
-	service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, sequentialPool{}, 1)
+	service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, sequentialPool{}, genres.NewDefaultPool(), 1)
 
 	_, err := service.Classify(cancelledContext(), ClassifyGenresInput{Tracks: []GenreTrack{genreTrack(t, "a", "A", "1")}})
 
@@ -229,7 +246,7 @@ func (source cancellingTagSource) FetchArtistTags(context.Context, string) ([]st
 }
 
 func TestGenreService_PoolFailure_ReturnsWrappedError(t *testing.T) {
-	service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, failingPool{err: errTechnical}, 1)
+	service := NewGenreService(&tagSourceSpy{}, &genreAdvisorStub{}, failingPool{err: errTechnical}, genres.NewDefaultPool(), 1)
 
 	_, err := service.Classify(context.Background(), ClassifyGenresInput{Tracks: []GenreTrack{genreTrack(t, "a", "A", "1")}})
 
@@ -251,7 +268,7 @@ func TestGenreService_CancelledDuringLookups(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			advisor := &genreAdvisorStub{}
-			service := NewGenreService(cancellingTagSource{cancel: cancel, cancelOnArt: testCase.cancelOnArt}, advisor, sequentialPool{}, 1)
+			service := NewGenreService(cancellingTagSource{cancel: cancel, cancelOnArt: testCase.cancelOnArt}, advisor, sequentialPool{}, genres.NewDefaultPool(), 1)
 
 			_, err := service.Classify(ctx, ClassifyGenresInput{Tracks: []GenreTrack{genreTrack(t, "a", "A", "1")}})
 

@@ -59,7 +59,7 @@ func metadataFixture(t *testing.T) metadataDoubles {
 		Warnings: []string{"credit warning"},
 		Failed:   []crediting.CreditFailure{{ID: "b", Path: "in/b.flac", Reason: "artist is missing"}},
 	}}
-	rock, err := genres.NewClassification(genres.ClassificationDetails{Genre: "Rock", IsKnown: true})
+	rock, err := genres.NewDefaultPool().NewClassification(genres.ClassificationDetails{Genre: "Rock", IsKnown: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestMetadataService_Resolve_ResolvesCreditsThenGenres(t *testing.T) {
 	doubles := metadataFixture(t)
 	recorder, creditFake, genreFake, credit := doubles.recorder, doubles.credits, doubles.genres, doubles.credit
 
-	resolved, err := NewMetadataService(creditFake, genreFake).Resolve(context.Background(), metadataInput())
+	resolved, err := NewMetadataService(creditFake, genreFake, genres.NewDefaultPool()).Resolve(context.Background(), metadataInput())
 
 	if err != nil || !slices.Equal(recorder.calls, []string{"credits", "genres"}) {
 		t.Fatalf("calls = %v err = %v", recorder.calls, err)
@@ -101,7 +101,7 @@ func TestMetadataService_Resolve_UntaggedTrack_TitleFromFileName(t *testing.T) {
 	doubles := metadataFixture(t)
 	input := ResolveMetadataInput{Tracks: []MetadataTrack{{ID: "a", Source: tracks.SourceDetails{Path: "Band/Song - Band.m4a"}}}}
 
-	_, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+	_, err := NewMetadataService(doubles.credits, doubles.genres, genres.NewDefaultPool()).Resolve(context.Background(), input)
 
 	if err != nil || doubles.credits.input.Tracks[0].Source != (credits.CreditSource{Path: "Band/Song - Band.m4a", Title: "Song", Artist: "Band"}) {
 		t.Fatalf("credit input = %+v err = %v", doubles.credits.input.Tracks, err)
@@ -113,7 +113,7 @@ func TestMetadataService_Resolve_FixedGenre_SkipsClassifier(t *testing.T) {
 	input := metadataInput()
 	input.FixedGenre = "Rock; Metal"
 
-	resolved, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+	resolved, err := NewMetadataService(doubles.credits, doubles.genres, genres.NewDefaultPool()).Resolve(context.Background(), input)
 
 	if err != nil || !slices.Equal(doubles.recorder.calls, []string{"credits"}) {
 		t.Fatalf("calls = %v err = %v", doubles.recorder.calls, err)
@@ -123,12 +123,28 @@ func TestMetadataService_Resolve_FixedGenre_SkipsClassifier(t *testing.T) {
 	}
 }
 
+func TestMetadataService_Resolve_FixedGenreFromCustomPool(t *testing.T) {
+	doubles := metadataFixture(t)
+	catalog, err := genres.NewPool([]genres.GenreDefinition{{Name: "Lo-Fi"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := metadataInput()
+	input.FixedGenre = "Lo-Fi"
+
+	resolved, err := NewMetadataService(doubles.credits, doubles.genres, catalog).Resolve(context.Background(), input)
+
+	if err != nil || resolved.Tracks[0].Classification.Genre().String() != "Lo-Fi" {
+		t.Fatalf("resolved = %+v err = %v", resolved, err)
+	}
+}
+
 func TestMetadataService_Resolve_FixedGenreNotInPool_ReturnsError(t *testing.T) {
 	doubles := metadataFixture(t)
 	input := metadataInput()
 	input.FixedGenre = "Nu Metal"
 
-	_, err := NewMetadataService(doubles.credits, doubles.genres).Resolve(context.Background(), input)
+	_, err := NewMetadataService(doubles.credits, doubles.genres, genres.NewDefaultPool()).Resolve(context.Background(), input)
 
 	if !errors.Is(err, genres.ErrGenreNotInPool) || slices.Contains(doubles.recorder.calls, "genres") {
 		t.Fatalf("calls = %v err = %v", doubles.recorder.calls, err)
@@ -137,9 +153,9 @@ func TestMetadataService_Resolve_FixedGenreNotInPool_ReturnsError(t *testing.T) 
 
 func TestMetadataService_Resolve_CreditFailure_PropagatesAsFailedTrack(t *testing.T) {
 	doubles := metadataFixture(t)
-	credits, genres := doubles.credits, doubles.genres
+	credits, classifier := doubles.credits, doubles.genres
 
-	resolved, err := NewMetadataService(credits, genres).Resolve(context.Background(), metadataInput())
+	resolved, err := NewMetadataService(credits, classifier, genres.NewDefaultPool()).Resolve(context.Background(), metadataInput())
 
 	if err != nil || !slices.Equal(resolved.Failed, []MetadataFailure{{ID: "b", Path: "in/b.flac", Reason: "artist is missing"}}) {
 		t.Fatalf("failed = %v err = %v", resolved.Failed, err)
@@ -148,9 +164,9 @@ func TestMetadataService_Resolve_CreditFailure_PropagatesAsFailedTrack(t *testin
 
 func TestMetadataService_Resolve_WarningsMerged(t *testing.T) {
 	doubles := metadataFixture(t)
-	credits, genres := doubles.credits, doubles.genres
+	credits, classifier := doubles.credits, doubles.genres
 
-	resolved, err := NewMetadataService(credits, genres).Resolve(context.Background(), metadataInput())
+	resolved, err := NewMetadataService(credits, classifier, genres.NewDefaultPool()).Resolve(context.Background(), metadataInput())
 
 	if err != nil || !slices.Equal(resolved.Warnings, []string{"credit warning", "genre warning"}) {
 		t.Fatalf("warnings = %v err = %v", resolved.Warnings, err)
@@ -170,11 +186,11 @@ func TestMetadataService_Resolve_Errors(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			doubles := metadataFixture(t)
-			recorder, credits, genres := doubles.recorder, doubles.credits, doubles.genres
+			recorder, credits, classifier := doubles.recorder, doubles.credits, doubles.genres
 			credits.err = testCase.creditErr
-			genres.err = testCase.genreErr
+			classifier.err = testCase.genreErr
 
-			_, err := NewMetadataService(credits, genres).Resolve(context.Background(), metadataInput())
+			_, err := NewMetadataService(credits, classifier, genres.NewDefaultPool()).Resolve(context.Background(), metadataInput())
 
 			if !errors.Is(err, errTechnical) || !slices.Equal(recorder.calls, testCase.expectedCalls) {
 				t.Fatalf("err = %v calls = %v", err, recorder.calls)
@@ -186,9 +202,9 @@ func TestMetadataService_Resolve_Errors(t *testing.T) {
 func TestMetadataService_Resolve_EmptyInput(t *testing.T) {
 	recorder := &callRecorder{}
 	credits := &creditNormalizerFake{recorder: recorder, output: crediting.NormalizedCredits{Credits: map[tracks.TrackID]credits.Credit{}}}
-	genres := &genreClassifierFake{recorder: recorder}
+	classifier := &genreClassifierFake{recorder: recorder}
 
-	resolved, err := NewMetadataService(credits, genres).Resolve(context.Background(), ResolveMetadataInput{})
+	resolved, err := NewMetadataService(credits, classifier, genres.NewDefaultPool()).Resolve(context.Background(), ResolveMetadataInput{})
 
 	if err != nil || len(resolved.Tracks) != 0 || resolved.Tracks == nil || resolved.Failed == nil || resolved.Warnings == nil {
 		t.Fatalf("resolved = %#v err = %v", resolved, err)

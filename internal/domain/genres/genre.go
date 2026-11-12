@@ -10,9 +10,11 @@ import (
 )
 
 var (
-	ErrGenreNotInPool     = errors.New("genre is not in the pool")
-	ErrGenreFormatInvalid = errors.New(`genre must be "Genre" or "Genre; Subgenre"`)
-	ErrSubgenreNotInGenre = errors.New("subgenre does not belong to the genre")
+	ErrGenreNotInPool         = errors.New("genre is not in the pool")
+	ErrGenreFormatInvalid     = errors.New(`genre must be "Genre" or "Genre; Subgenre"`)
+	ErrSubgenreNotInGenre     = errors.New("subgenre does not belong to the genre")
+	ErrGenrePoolEmpty         = errors.New("genre pool is empty")
+	ErrGenreDefinitionInvalid = errors.New("genre definition is invalid")
 )
 
 const (
@@ -20,80 +22,152 @@ const (
 	unknownGenreValue   = "desconhecido"
 	genreJoinSeparator  = "; "
 	nationalSuffixSpace = " "
+	listSeparator       = ", "
 )
 
-type genreDefinition struct {
-	name           string
-	subgenres      []string
-	isNationalOnly bool
-	hint           string
+type GenreDefinition struct {
+	Name           string
+	Subgenres      []string
+	IsNationalOnly bool
+	Hint           string
 }
 
-var genrePool = []genreDefinition{
-	{name: "Rock", subgenres: []string{"Metal", "Punk"}},
-	{name: "Indie / Alternative"},
-	{name: "Pop"},
-	{name: "Hip-Hop"},
-	{name: "Rap", subgenres: []string{"Rap Acústico"}},
-	{name: "R&B / Soul"},
-	{name: "Electronic", subgenres: []string{"Dance", "House", "Ambient"}},
-	{name: "Jazz / Blues"},
-	{name: "Funk", hint: "classic international funk"},
-	{name: "Fonk", hint: "phonk, independent genre"},
-	{name: "Reggae"},
-	{name: "Reggaeton"},
-	{name: "Country / Folk"},
-	{name: "Classical"},
-	{name: "Acoustic"},
-	{name: "Soundtrack"},
-	{name: "Funk BR", subgenres: []string{"Funk Carioca", "Melódico", "Remix", "Afrobeats"}, isNationalOnly: true},
-	{name: "MPB", isNationalOnly: true},
-	{name: "Samba", isNationalOnly: true},
-	{name: "Pagode", isNationalOnly: true},
+var defaultDefinitions = []GenreDefinition{
+	{Name: "Rock", Subgenres: []string{"Metal", "Punk"}},
+	{Name: "Indie / Alternative"},
+	{Name: "Pop"},
+	{Name: "Hip-Hop"},
+	{Name: "Rap", Subgenres: []string{"Rap Acústico"}},
+	{Name: "R&B / Soul"},
+	{Name: "Electronic", Subgenres: []string{"Dance", "House", "Ambient"}},
+	{Name: "Jazz / Blues"},
+	{Name: "Funk", Hint: "classic international funk"},
+	{Name: "Fonk", Hint: "phonk, independent genre"},
+	{Name: "Reggae"},
+	{Name: "Reggaeton"},
+	{Name: "Country / Folk"},
+	{Name: "Classical"},
+	{Name: "Acoustic"},
+	{Name: "Soundtrack"},
+	{Name: "Funk BR", Subgenres: []string{"Funk Carioca", "Melódico", "Remix", "Afrobeats"}, IsNationalOnly: true},
+	{Name: "MPB", IsNationalOnly: true},
+	{Name: "Samba", IsNationalOnly: true},
+	{Name: "Pagode", IsNationalOnly: true},
 }
 
-func GenreNames() []string {
-	names := make([]string, 0, len(genrePool))
-	for _, definition := range genrePool {
-		names = append(names, definition.name)
+type Pool struct {
+	definitions []GenreDefinition
+}
+
+func NewDefaultPool() Pool {
+	return Pool{definitions: cloneDefinitions(defaultDefinitions)}
+}
+
+func NewPool(definitions []GenreDefinition) (Pool, error) {
+	if len(definitions) == 0 {
+		return Pool{}, ErrGenrePoolEmpty
 	}
-	return names
-}
-
-func SubgenreNames() []string {
-	names := []string{}
-	for _, definition := range genrePool {
-		names = append(names, definition.subgenres...)
-	}
-	return names
-}
-
-func GenreHints() map[string]string {
-	hints := map[string]string{}
-	for _, definition := range genrePool {
-		if definition.hint == "" {
-			continue
+	cleaned := make([]GenreDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		definition = definition.clean()
+		if err := definition.validateAgainst(cleaned); err != nil {
+			return Pool{}, err
 		}
-		hints[definition.name] = definition.hint
+		cleaned = append(cleaned, definition)
+	}
+	return Pool{definitions: cleaned}, nil
+}
+
+func (definition GenreDefinition) clean() GenreDefinition {
+	subgenres := make([]string, 0, len(definition.Subgenres))
+	for _, subgenre := range definition.Subgenres {
+		subgenres = append(subgenres, credits.CollapseWhitespace(subgenre))
+	}
+	return GenreDefinition{
+		Name: credits.CollapseWhitespace(definition.Name), Subgenres: subgenres,
+		IsNationalOnly: definition.IsNationalOnly, Hint: credits.CollapseWhitespace(definition.Hint),
+	}
+}
+
+func (definition GenreDefinition) validateAgainst(accepted []GenreDefinition) error {
+	names := append([]string{definition.Name}, definition.Subgenres...)
+	for index, name := range names {
+		if !isValidGenreName(name) || slices.ContainsFunc(names[:index], matchesIgnoringCase(name)) {
+			return fmt.Errorf("%w: %q", ErrGenreDefinitionInvalid, name)
+		}
+	}
+	if slices.ContainsFunc(accepted, func(other GenreDefinition) bool { return strings.EqualFold(other.Name, definition.Name) }) {
+		return fmt.Errorf("%w: %q is defined twice", ErrGenreDefinitionInvalid, definition.Name)
+	}
+	return nil
+}
+
+func isValidGenreName(name string) bool {
+	return name != "" && !strings.Contains(name, genreJoinSeparator[:1]) && !strings.EqualFold(name, unknownGenreValue)
+}
+
+func matchesIgnoringCase(name string) func(string) bool {
+	return func(candidate string) bool { return strings.EqualFold(candidate, name) }
+}
+
+func cloneDefinitions(definitions []GenreDefinition) []GenreDefinition {
+	cloned := make([]GenreDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		definition.Subgenres = slices.Clone(definition.Subgenres)
+		cloned = append(cloned, definition)
+	}
+	return cloned
+}
+
+func (pool Pool) Definitions() []GenreDefinition {
+	return cloneDefinitions(pool.definitions)
+}
+
+func (pool Pool) ListNames() []string {
+	names := make([]string, 0, len(pool.definitions))
+	for _, definition := range pool.definitions {
+		names = append(names, definition.Name)
+	}
+	return names
+}
+
+func (pool Pool) ListSubgenreNames() []string {
+	names := []string{}
+	for _, definition := range pool.definitions {
+		for _, subgenre := range definition.Subgenres {
+			if !slices.Contains(names, subgenre) {
+				names = append(names, subgenre)
+			}
+		}
+	}
+	return names
+}
+
+func (pool Pool) ListHints() map[string]string {
+	hints := map[string]string{}
+	for _, definition := range pool.definitions {
+		if definition.Hint != "" {
+			hints[definition.Name] = definition.Hint
+		}
 	}
 	return hints
 }
 
-func NationalOnlyGenreNames() []string {
+func (pool Pool) ListNationalOnlyNames() []string {
 	names := []string{}
-	for _, definition := range genrePool {
-		if definition.isNationalOnly {
-			names = append(names, definition.name)
+	for _, definition := range pool.definitions {
+		if definition.IsNationalOnly {
+			names = append(names, definition.Name)
 		}
 	}
 	return names
 }
 
-func GenreSubgenres() map[string][]string {
+func (pool Pool) ListSubgenres() map[string][]string {
 	subgenres := map[string][]string{}
-	for _, definition := range genrePool {
-		if len(definition.subgenres) > 0 {
-			subgenres[definition.name] = append([]string{}, definition.subgenres...)
+	for _, definition := range pool.definitions {
+		if len(definition.Subgenres) > 0 {
+			subgenres[definition.Name] = slices.Clone(definition.Subgenres)
 		}
 	}
 	return subgenres
@@ -107,46 +181,57 @@ type ClassificationDetails struct {
 }
 
 type Classification struct {
-	genre       string
-	subgenre    string
-	isBrazilian bool
-	isKnown     bool
+	genre          string
+	subgenre       string
+	isBrazilian    bool
+	isKnown        bool
+	isNationalOnly bool
 }
 
-func NewClassification(details ClassificationDetails) (Classification, error) {
+func (pool Pool) NewClassification(details ClassificationDetails) (Classification, error) {
 	if !details.IsKnown {
 		return NewUnknownClassification(), nil
 	}
-	definition, found := findGenreDefinition(details.Genre)
+	definition, found := pool.find(details.Genre)
 	if !found {
 		return Classification{}, ErrGenreNotInPool
 	}
-	if details.Subgenre != "" && !slices.Contains(definition.subgenres, details.Subgenre) {
+	if details.Subgenre != "" && !slices.Contains(definition.Subgenres, details.Subgenre) {
 		return Classification{}, ErrSubgenreNotInGenre
 	}
-	return Classification{genre: details.Genre, subgenre: details.Subgenre, isBrazilian: details.IsBrazilian, isKnown: true}, nil
+	return Classification{
+		genre: details.Genre, subgenre: details.Subgenre, isBrazilian: details.IsBrazilian,
+		isKnown: true, isNationalOnly: definition.IsNationalOnly,
+	}, nil
 }
 
-func ParseGenre(value string) (Classification, error) {
+func (pool Pool) ParseGenre(value string) (Classification, error) {
 	parts := strings.Split(value, genreJoinSeparator[:1])
 	if len(parts) > 2 {
 		return Classification{}, fmt.Errorf("%w: %q", ErrGenreFormatInvalid, value)
 	}
 	name, isBrazilian := cutNationalSuffix(parts[0])
-	index := slices.IndexFunc(genrePool, func(definition genreDefinition) bool { return strings.EqualFold(definition.name, name) })
+	index := slices.IndexFunc(pool.definitions, func(definition GenreDefinition) bool { return strings.EqualFold(definition.Name, name) })
 	if index < 0 {
-		return Classification{}, fmt.Errorf("%w: %q", ErrGenreNotInPool, name)
+		return Classification{}, fmt.Errorf("%w: %q; use one of: %s", ErrGenreNotInPool, name, strings.Join(pool.ListNames(), listSeparator))
 	}
-	definition, subgenre := genrePool[index], ""
+	definition, subgenre := pool.definitions[index], ""
 	if len(parts) == 2 {
 		name, _ := cutNationalSuffix(parts[1])
-		position := slices.IndexFunc(definition.subgenres, func(candidate string) bool { return strings.EqualFold(candidate, name) })
+		position := slices.IndexFunc(definition.Subgenres, matchesIgnoringCase(name))
 		if position < 0 {
-			return Classification{}, fmt.Errorf("%w: %q", ErrSubgenreNotInGenre, name)
+			return Classification{}, fmt.Errorf("%w: %q; sub-genres of %s: %s", ErrSubgenreNotInGenre, name, definition.Name, definition.formatSubgenres())
 		}
-		subgenre = definition.subgenres[position]
+		subgenre = definition.Subgenres[position]
 	}
-	return NewClassification(ClassificationDetails{Genre: definition.name, Subgenre: subgenre, IsBrazilian: isBrazilian, IsKnown: true})
+	return pool.NewClassification(ClassificationDetails{Genre: definition.Name, Subgenre: subgenre, IsBrazilian: isBrazilian, IsKnown: true})
+}
+
+func (definition GenreDefinition) formatSubgenres() string {
+	if len(definition.Subgenres) == 0 {
+		return "none"
+	}
+	return strings.Join(definition.Subgenres, listSeparator)
 }
 
 func cutNationalSuffix(value string) (string, bool) {
@@ -156,6 +241,14 @@ func cutNationalSuffix(value string) (string, bool) {
 		return trimmed[:len(trimmed)-len(suffix)], true
 	}
 	return trimmed, false
+}
+
+func (pool Pool) find(name string) (GenreDefinition, bool) {
+	index := slices.IndexFunc(pool.definitions, func(definition GenreDefinition) bool { return definition.Name == name })
+	if index < 0 {
+		return GenreDefinition{}, false
+	}
+	return pool.definitions[index], true
 }
 
 func NewUnknownClassification() Classification {
@@ -180,15 +273,10 @@ func (classification Classification) Genre() Genre {
 	if !classification.isKnown {
 		return Genre{value: unknownGenreValue}
 	}
-	if classification.isSuffixed() {
+	if classification.isBrazilian && !classification.isNationalOnly {
 		return Genre{value: joinGenreParts(appendNationalSuffix(classification.genre), appendNationalSuffix(classification.subgenre))}
 	}
 	return Genre{value: joinGenreParts(classification.genre, classification.subgenre)}
-}
-
-func (classification Classification) isSuffixed() bool {
-	definition, _ := findGenreDefinition(classification.genre)
-	return classification.isBrazilian && !definition.isNationalOnly
 }
 
 type Genre struct {
@@ -197,14 +285,6 @@ type Genre struct {
 
 func (genre Genre) String() string {
 	return genre.value
-}
-
-func findGenreDefinition(name string) (genreDefinition, bool) {
-	index := slices.IndexFunc(genrePool, func(definition genreDefinition) bool { return definition.name == name })
-	if index < 0 {
-		return genreDefinition{}, false
-	}
-	return genrePool[index], true
 }
 
 func appendNationalSuffix(name string) string {
@@ -219,197 +299,4 @@ func joinGenreParts(genre, subgenre string) string {
 		return genre
 	}
 	return genre + genreJoinSeparator + subgenre
-}
-
-type tagTarget struct {
-	genre    string
-	subgenre string
-}
-
-var brazilianSignals = []string{"brazil", "brasil", "nacional", "mpb", "funk carioca", "sertanejo", "pagode", "samba"}
-
-var tagTargets = map[string]tagTarget{
-	"hip-hop":             {genre: "Hip-Hop"},
-	"hip hop":             {genre: "Hip-Hop"},
-	"underground hip-hop": {genre: "Hip-Hop"},
-	"rap":                 {genre: "Rap"},
-	"brazilian rap":       {genre: "Rap"},
-	"rap nacional":        {genre: "Rap"},
-	"gangsta rap":         {genre: "Rap"},
-	"trap":                {genre: "Rap"},
-	"acoustic rap":        {genre: "Rap", subgenre: "Rap Acústico"},
-	"heavy metal":         {genre: "Rock", subgenre: "Metal"},
-	"metal":               {genre: "Rock", subgenre: "Metal"},
-	"thrash metal":        {genre: "Rock", subgenre: "Metal"},
-	"death metal":         {genre: "Rock", subgenre: "Metal"},
-	"black metal":         {genre: "Rock", subgenre: "Metal"},
-	"metalcore":           {genre: "Rock", subgenre: "Metal"},
-	"nu metal":            {genre: "Rock", subgenre: "Metal"},
-	"doom metal":          {genre: "Rock", subgenre: "Metal"},
-	"punk":                {genre: "Rock", subgenre: "Punk"},
-	"punk rock":           {genre: "Rock", subgenre: "Punk"},
-	"pop punk":            {genre: "Rock", subgenre: "Punk"},
-	"hardcore punk":       {genre: "Rock", subgenre: "Punk"},
-	"post-punk":           {genre: "Rock", subgenre: "Punk"},
-	"hard rock":           {genre: "Rock"},
-	"classic rock":        {genre: "Rock"},
-	"rock":                {genre: "Rock"},
-	"brazilian rock":      {genre: "Rock"},
-	"grunge":              {genre: "Rock"},
-	"progressive rock":    {genre: "Rock"},
-	"psychedelic rock":    {genre: "Rock"},
-	"alternative rock":    {genre: "Indie / Alternative"},
-	"indie":               {genre: "Indie / Alternative"},
-	"indie rock":          {genre: "Indie / Alternative"},
-	"alternative":         {genre: "Indie / Alternative"},
-	"indie pop":           {genre: "Indie / Alternative"},
-	"shoegaze":            {genre: "Indie / Alternative"},
-	"pop":                 {genre: "Pop"},
-	"pop rock":            {genre: "Pop"},
-	"synthpop":            {genre: "Pop"},
-	"k-pop":               {genre: "Pop"},
-	"brazilian pop":       {genre: "Pop"},
-	"dance":               {genre: "Electronic", subgenre: "Dance"},
-	"edm":                 {genre: "Electronic", subgenre: "Dance"},
-	"eurodance":           {genre: "Electronic", subgenre: "Dance"},
-	"dance-pop":           {genre: "Electronic", subgenre: "Dance"},
-	"house":               {genre: "Electronic", subgenre: "House"},
-	"deep house":          {genre: "Electronic", subgenre: "House"},
-	"tech house":          {genre: "Electronic", subgenre: "House"},
-	"electro house":       {genre: "Electronic", subgenre: "House"},
-	"progressive house":   {genre: "Electronic", subgenre: "House"},
-	"ambient":             {genre: "Electronic", subgenre: "Ambient"},
-	"chillout":            {genre: "Electronic", subgenre: "Ambient"},
-	"electronic":          {genre: "Electronic"},
-	"electronica":         {genre: "Electronic"},
-	"techno":              {genre: "Electronic"},
-	"trance":              {genre: "Electronic"},
-	"dubstep":             {genre: "Electronic"},
-	"drum and bass":       {genre: "Electronic"},
-	"r&b":                 {genre: "R&B / Soul"},
-	"rnb":                 {genre: "R&B / Soul"},
-	"soul":                {genre: "R&B / Soul"},
-	"neo-soul":            {genre: "R&B / Soul"},
-	"jazz":                {genre: "Jazz / Blues"},
-	"blues":               {genre: "Jazz / Blues"},
-	"smooth jazz":         {genre: "Jazz / Blues"},
-	"funk":                {genre: "Funk"},
-	"phonk":               {genre: "Fonk"},
-	"drift phonk":         {genre: "Fonk"},
-	"brazilian phonk":     {genre: "Fonk"},
-	"reggae":              {genre: "Reggae"},
-	"dancehall":           {genre: "Reggae"},
-	"reggaeton":           {genre: "Reggaeton"},
-	"country":             {genre: "Country / Folk"},
-	"folk":                {genre: "Country / Folk"},
-	"americana":           {genre: "Country / Folk"},
-	"classical":           {genre: "Classical"},
-	"orchestral":          {genre: "Classical"},
-	"acoustic":            {genre: "Acoustic"},
-	"soundtrack":          {genre: "Soundtrack"},
-	"video game music":    {genre: "Soundtrack"},
-	"ost":                 {genre: "Soundtrack"},
-	"score":               {genre: "Soundtrack"},
-	"funk carioca":        {genre: "Funk BR", subgenre: "Funk Carioca"},
-	"baile funk":          {genre: "Funk BR", subgenre: "Funk Carioca"},
-	"funk brasileiro":     {genre: "Funk BR"},
-	"funk melody":         {genre: "Funk BR", subgenre: "Melódico"},
-	"mpb":                 {genre: "MPB"},
-	"bossa nova":          {genre: "MPB"},
-	"samba":               {genre: "Samba"},
-	"pagode":              {genre: "Pagode"},
-}
-
-type TagEvidence struct {
-	tags []string
-}
-
-func NewTagEvidence(tags []string) TagEvidence {
-	normalized := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		cleaned := strings.ToLower(strings.TrimSpace(tag))
-		if cleaned == "" || slices.Contains(normalized, cleaned) {
-			continue
-		}
-		normalized = append(normalized, cleaned)
-	}
-	return TagEvidence{tags: normalized}
-}
-
-func (evidence TagEvidence) Tags() []string {
-	return slices.Clone(evidence.tags)
-}
-
-func (evidence TagEvidence) HasBrazilianSignal() bool {
-	return slices.ContainsFunc(evidence.tags, isBrazilianTag)
-}
-
-func ClassifyByTags(evidence TagEvidence) Classification {
-	for _, tag := range evidence.tags {
-		target, found := tagTargets[tag]
-		if !found {
-			continue
-		}
-		return Classification{genre: target.genre, subgenre: target.subgenre, isBrazilian: evidence.HasBrazilianSignal(), isKnown: true}
-	}
-	return NewUnknownClassification()
-}
-
-type NationalityBallot struct {
-	MainArtist     string
-	Classification Classification
-	Evidence       TagEvidence
-}
-
-func ResolveNationality(ballots []NationalityBallot) []Classification {
-	decisions := decideNationalityPerArtist(ballots)
-	resolved := make([]Classification, 0, len(ballots))
-	for _, ballot := range ballots {
-		resolved = append(resolved, ballot.Classification.ApplyNationality(decisions[artistKey(ballot.MainArtist)]))
-	}
-	return resolved
-}
-
-type nationalityTally struct {
-	brazilianVotes     int
-	internationalVotes int
-	hasSignal          bool
-}
-
-func (tally nationalityTally) isBrazilian() bool {
-	if tally.brazilianVotes != tally.internationalVotes {
-		return tally.brazilianVotes > tally.internationalVotes
-	}
-	return tally.hasSignal
-}
-
-func decideNationalityPerArtist(ballots []NationalityBallot) map[string]bool {
-	tallies := map[string]nationalityTally{}
-	for _, ballot := range ballots {
-		key := artistKey(ballot.MainArtist)
-		tallies[key] = countBallot(tallies[key], ballot)
-	}
-	decisions := make(map[string]bool, len(tallies))
-	for key, tally := range tallies {
-		decisions[key] = tally.isBrazilian()
-	}
-	return decisions
-}
-
-func countBallot(tally nationalityTally, ballot NationalityBallot) nationalityTally {
-	if ballot.Classification.IsBrazilian() {
-		tally.brazilianVotes++
-	} else {
-		tally.internationalVotes++
-	}
-	tally.hasSignal = tally.hasSignal || ballot.Evidence.HasBrazilianSignal()
-	return tally
-}
-
-func artistKey(artist string) string {
-	return strings.ToLower(credits.CollapseWhitespace(artist))
-}
-
-func isBrazilianTag(tag string) bool {
-	return slices.ContainsFunc(brazilianSignals, func(signal string) bool { return strings.Contains(tag, signal) })
 }

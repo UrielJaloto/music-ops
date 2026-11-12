@@ -402,6 +402,24 @@ func TestE2E_TagOverrides(t *testing.T) {
 	}
 }
 
+func TestE2E_CustomGenrePool(t *testing.T) {
+	environment := newE2EEnvironment(t)
+	environment.lastfm.isFailing = true
+	environment.addInput(stereo("Album/01.flac", "flac", fixtureTags{title: "First", artist: "Band"}))
+	genresFile := filepath.Join(t.TempDir(), "genres.yaml")
+	if err := os.WriteFile(genresFile, []byte("- name: Lo-Fi\n  subgenres: [Chillhop]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rejected := environment.run("run", environment.input, "--set", "genres.file="+genresFile, "--tag", "genre=Rock")
+	result := environment.run("run", environment.input, "--set", "genres.file="+genresFile, "--tag", "genre=lo-fi;chillhop")
+
+	if rejected.ExitCode != 1 || result.ExitCode != 0 || result.Report.Counts["published"] != 1 {
+		t.Fatalf("rejected = %+v result = %+v", rejected, result)
+	}
+	environment.assertTags(expectedTrack{path: "in/Band - First.m4a", title: "First", artist: "Band", albumArtist: "Band", genre: "Lo-Fi; Chillhop", track: "1/1"})
+}
+
 func TestE2E_InvalidTag_RunDoesNotStart(t *testing.T) {
 	environment := newE2EEnvironment(t)
 	environment.addInput(stereo("Album/01.flac", "flac", fixtureTags{title: "First", artist: "Band"}))

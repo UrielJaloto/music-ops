@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/credits"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/process"
 	"github.com/UrielJaloto/music-ops/internal/infrastructure/transcoding"
 	"github.com/UrielJaloto/music-ops/internal/services/classification"
@@ -90,7 +91,7 @@ func TestAdvisorChain_SuggestCredits(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			chain := NewAdvisorChain([]ChainedAdvisor{testCase.first, testCase.second}, IsValidCreditSuggestion, ValidGenreSuggestion)
+			chain := NewAdvisorChain([]ChainedAdvisor{testCase.first, testCase.second}, IsValidCreditSuggestion, NewGenreSuggestionValidator(genres.NewDefaultPool()))
 
 			suggestions, err := chain.SuggestCredits(context.Background(), songRequests())
 
@@ -109,7 +110,7 @@ func TestAdvisorChain_SuggestGenres_RejectsInvalidGenre(t *testing.T) {
 	valid := classification.GenreSuggestion{Key: "g1", Genre: "Rock", Subgenre: "Metal", IsKnown: true}
 	first := &scriptedAdvisor{genres: map[string]classification.GenreSuggestion{"g1": invalid}}
 	second := &scriptedAdvisor{genres: map[string]classification.GenreSuggestion{"g1": valid}}
-	chain := NewAdvisorChain([]ChainedAdvisor{first, second}, IsValidCreditSuggestion, ValidGenreSuggestion)
+	chain := NewAdvisorChain([]ChainedAdvisor{first, second}, IsValidCreditSuggestion, NewGenreSuggestionValidator(genres.NewDefaultPool()))
 
 	suggestions, err := chain.SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g1"}})
 
@@ -123,7 +124,7 @@ func TestAdvisorChain_CancelledStopsChain(t *testing.T) {
 	cancel()
 	first := &scriptedAdvisor{}
 
-	suggestions, err := NewAdvisorChain([]ChainedAdvisor{first}, IsValidCreditSuggestion, ValidGenreSuggestion).SuggestCredits(ctx, songRequests())
+	suggestions, err := NewAdvisorChain([]ChainedAdvisor{first}, IsValidCreditSuggestion, NewGenreSuggestionValidator(genres.NewDefaultPool())).SuggestCredits(ctx, songRequests())
 
 	if err != nil || len(suggestions) != 0 || len(first.creditBatches) != 0 {
 		t.Fatalf("suggestions = %v batches = %v", suggestions, first.creditBatches)
@@ -131,7 +132,7 @@ func TestAdvisorChain_CancelledStopsChain(t *testing.T) {
 }
 
 func TestAdvisorChain_ProbeAndNames(t *testing.T) {
-	chain := NewAdvisorChain([]ChainedAdvisor{&scriptedAdvisor{name: "local:qwen"}, &scriptedAdvisor{name: "local:backup", err: errors.New("down")}}, IsValidCreditSuggestion, ValidGenreSuggestion)
+	chain := NewAdvisorChain([]ChainedAdvisor{&scriptedAdvisor{name: "local:qwen"}, &scriptedAdvisor{name: "local:backup", err: errors.New("down")}}, IsValidCreditSuggestion, NewGenreSuggestionValidator(genres.NewDefaultPool()))
 
 	reports := chain.ProbeAdvisors(context.Background())
 
@@ -147,7 +148,7 @@ func TestValidators(t *testing.T) {
 	if !IsValidCreditSuggestion(request, goodCredit("a", "Song A", "Main", "X")) || IsValidCreditSuggestion(request, goodCredit("a", "", "Main")) || IsValidCreditSuggestion(request, goodCredit("a", "Song A")) {
 		t.Fatal("credit validator")
 	}
-	if !ValidGenreSuggestion(classification.GenreRequest{}, classification.GenreSuggestion{IsKnown: false, Genre: "x"}) || ValidGenreSuggestion(classification.GenreRequest{}, classification.GenreSuggestion{IsKnown: true, Genre: "x"}) {
+	if !NewGenreSuggestionValidator(genres.NewDefaultPool())(classification.GenreRequest{}, classification.GenreSuggestion{IsKnown: false, Genre: "x"}) || NewGenreSuggestionValidator(genres.NewDefaultPool())(classification.GenreRequest{}, classification.GenreSuggestion{IsKnown: true, Genre: "x"}) {
 		t.Fatal("genre validator")
 	}
 }
@@ -178,7 +179,7 @@ func TestGenreAdvisorCache_PartialHits(t *testing.T) {
 	rock := classification.GenreSuggestion{Key: "g1", Genre: "Rock", IsKnown: true}
 	pop := classification.GenreSuggestion{Key: "g2", Genre: "Pop", IsKnown: true}
 	inner := &scriptedAdvisor{genres: map[string]classification.GenreSuggestion{"g1": rock, "g2": pop}}
-	decorator := NewGenreAdvisorCache(inner, newMemoryByteCache(), "local:qwen")
+	decorator := NewGenreAdvisorCache(inner, newMemoryByteCache(), "local:qwen", genres.NewDefaultPool())
 	first := classification.GenreRequest{Key: "g1", Title: "Iron Man", Artists: []string{"Black Sabbath"}}
 	second := classification.GenreRequest{Key: "g2", Title: "Thriller", Artists: []string{"Michael Jackson"}}
 
@@ -210,12 +211,12 @@ func TestAdvisorCache_Failures(t *testing.T) {
 	inner := &scriptedAdvisor{err: ErrAdvisorUnavailable}
 
 	_, storeErr := NewCreditAdvisorCache(inner, failing, "x").SuggestCredits(context.Background(), songRequests())
-	_, innerErr := NewGenreAdvisorCache(inner, corrupt, "x").SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g"}})
-	key := cachedTask[classification.GenreRequest, classification.GenreSuggestion]{scope: "genre" + PromptFingerprint() + "x", identity: func(request classification.GenreRequest) any {
+	_, innerErr := NewGenreAdvisorCache(inner, corrupt, "x", genres.NewDefaultPool()).SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g"}})
+	key := cachedTask[classification.GenreRequest, classification.GenreSuggestion]{scope: "genre" + FingerprintGenrePrompt(genres.NewDefaultPool()) + "x", identity: func(request classification.GenreRequest) any {
 		return genreIdentity{Path: request.Path, Title: request.Title, Artists: request.Artists, Tags: request.Tags}
 	}}.buildCacheKey(classification.GenreRequest{Key: "g"})
 	corrupt.values[key] = []byte("{")
-	_, decodeErr := NewGenreAdvisorCache(inner, corrupt, "x").SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g"}})
+	_, decodeErr := NewGenreAdvisorCache(inner, corrupt, "x", genres.NewDefaultPool()).SuggestGenres(context.Background(), []classification.GenreRequest{{Key: "g"}})
 
 	if !errors.Is(storeErr, errStore) || !errors.Is(innerErr, ErrAdvisorUnavailable) || decodeErr == nil {
 		t.Fatalf("errors = %v %v %v", storeErr, innerErr, decodeErr)

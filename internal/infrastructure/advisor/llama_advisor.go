@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/services/classification"
 	"github.com/UrielJaloto/music-ops/internal/services/crediting"
 	"github.com/UrielJaloto/music-ops/internal/services/diagnostics"
@@ -41,6 +42,7 @@ type LlamaAdvisorSettings struct {
 	Model          string
 	LoadingTimeout time.Duration
 	Clock          AdvisorClock
+	Genres         genres.Pool
 }
 
 type LlamaAdvisor struct {
@@ -66,7 +68,7 @@ func (advisor LlamaAdvisor) SuggestCredits(ctx context.Context, requests []credi
 
 func (advisor LlamaAdvisor) SuggestGenres(ctx context.Context, requests []classification.GenreRequest) ([]classification.GenreSuggestion, error) {
 	task := advisorTask[classification.GenreRequest, classification.GenreSuggestion]{
-		system: BuildGenreSystemPrompt(), schemaName: genreSchemaName, schema: BuildGenreSchema(),
+		system: BuildGenreSystemPrompt(advisor.settings.Genres), schemaName: genreSchemaName, schema: BuildGenreSchema(advisor.settings.Genres),
 		build: BuildGenreUserMessage, decode: DecodeGenreSuggestions,
 	}
 	return suggestInBatches(ctx, advisor.complete, task, requests)

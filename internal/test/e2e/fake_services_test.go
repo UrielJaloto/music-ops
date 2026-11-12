@@ -180,7 +180,7 @@ func (oracle *adviceOracle) genreAnswer(item map[string]any) map[string]any {
 	for _, tag := range item["tags"].([]any) {
 		tags = append(tags, text(tag))
 	}
-	classification := genres.ClassifyByTags(genres.NewTagEvidence(tags))
+	classification := genres.NewDefaultPool().ClassifyByTags(genres.NewTagEvidence(tags))
 	return withKey(classificationAnswer(classification), item["key"])
 }
 

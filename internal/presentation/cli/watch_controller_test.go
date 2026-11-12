@@ -63,6 +63,19 @@ func TestWatchController_MissingInbox(t *testing.T) {
 	}
 }
 
+func TestWatchController_GenreNotInPool(t *testing.T) {
+	watcher := &inboxWatcherSpy{}
+	var output bytes.Buffer
+	defaults := WatchDefaults{Inbox: "D:/Inbox", Import: testDefaults()}
+	defaults.Import.Tags.Genre = "Rock; House"
+
+	code := NewWatchController(watcher, NewWatchPresenter(&output, NewErrorPresenter(&output)), defaults).Execute(context.Background(), nil)
+
+	if code != 1 || len(watcher.inputs) != 0 || output.String() != "error: subgenre does not belong to the genre: \"House\"; sub-genres of Rock: Metal, Punk\n" {
+		t.Fatalf("code = %d output = %q", code, output.String())
+	}
+}
+
 func TestWatchController_WatchError(t *testing.T) {
 	code, output := runWatch(&inboxWatcherSpy{err: discovery.ErrFolderMissing}, "D:/Inbox")
 

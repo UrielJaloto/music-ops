@@ -15,8 +15,7 @@ func TestNewTagOverrides(t *testing.T) {
 		expectedError error
 	}{
 		{name: "Empty", values: map[string]string{}},
-		{name: "EveryTag", values: map[string]string{"album": "Hybrid  Theory", "genre": " rock;metal ", "year": "2000"}, expected: TagOverrides{Album: "Hybrid Theory", Genre: "Rock; Metal", Year: "2000"}},
-		{name: "GenreNotInPool", values: map[string]string{"genre": "Nu Metal"}, expectedError: genres.ErrGenreNotInPool},
+		{name: "EveryTag", values: map[string]string{"album": "Hybrid  Theory", "genre": " rock;metal ", "year": "2000"}, expected: TagOverrides{Album: "Hybrid Theory", Genre: "rock;metal", Year: "2000"}},
 		{name: "KeyCaseAndSpacesIgnored", values: map[string]string{" Album ": "X"}, expected: TagOverrides{Album: "X"}},
 		{name: "UnknownTag", values: map[string]string{"artist": "X"}, expectedError: ErrTagUnknown},
 		{name: "EmptyValue", values: map[string]string{"album": "  "}, expectedError: ErrTagValueMissing},
@@ -26,6 +25,28 @@ func TestNewTagOverrides(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			overrides, err := NewTagOverrides(testCase.values)
+
+			if !errors.Is(err, testCase.expectedError) || overrides != testCase.expected {
+				t.Fatalf("overrides = %+v err = %v", overrides, err)
+			}
+		})
+	}
+}
+
+func TestTagOverrides_CanonicalizeGenre(t *testing.T) {
+	cases := []struct {
+		name          string
+		overrides     TagOverrides
+		expected      TagOverrides
+		expectedError error
+	}{
+		{name: "NoGenre_Unchanged", overrides: TagOverrides{Album: "X"}, expected: TagOverrides{Album: "X"}},
+		{name: "GenreCanonicalized", overrides: TagOverrides{Genre: "rock;metal", Year: "2000"}, expected: TagOverrides{Genre: "Rock; Metal", Year: "2000"}},
+		{name: "GenreNotInPool", overrides: TagOverrides{Genre: "Nu Metal"}, expectedError: genres.ErrGenreNotInPool},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			overrides, err := testCase.overrides.CanonicalizeGenre(genres.NewDefaultPool())
 
 			if !errors.Is(err, testCase.expectedError) || overrides != testCase.expected {
 				t.Fatalf("overrides = %+v err = %v", overrides, err)

@@ -141,7 +141,7 @@ func (app application) buildParts(local advisor.LazyLlamaAdvisor) parts {
 	return parts{
 		encoding: app.buildEncoding(),
 		stores:   stores{bolt: storage.NewBoltStore(filepath.Join(workDir, stateFileName)), staging: filesystem.NewStagingArea(workDir), reports: reports, runLog: runLog},
-		chain:    advisor.NewAdvisorChain([]advisor.ChainedAdvisor{local}, advisor.IsValidCreditSuggestion, advisor.ValidGenreSuggestion),
+		chain:    advisor.NewAdvisorChain([]advisor.ChainedAdvisor{local}, advisor.IsValidCreditSuggestion, advisor.NewGenreSuggestionValidator(app.config.Genres)),
 		tags:     app.buildLastFMClient(),
 		pool:     runtime.NewWorkerPool(app.config.Encoder.Workers),
 		logger:   logging.NewLogger(runLog, cli.SelectLogOutput(app.request, app.console.errors)),
@@ -167,7 +167,7 @@ func (app application) buildLocalAdvisor() advisor.LazyLlamaAdvisor {
 	configured := app.config.Advisor
 	local := advisor.NewLlamaAdvisor(advisor.LlamaAdvisorSettings{
 		BaseURL: advisor.BuildLocalAdvisorURL(configured.Port), Model: advisor.ExtractModelName(configured.ModelFile),
-		LoadingTimeout: advisor.ModelLoadingTimeout, Clock: app.clock,
+		LoadingTimeout: advisor.ModelLoadingTimeout, Clock: app.clock, Genres: app.config.Genres,
 	}, &http.Client{Timeout: advisor.CompletionTimeout})
 	server := advisor.NewLlamaServer(app.runner, advisor.LlamaServerSettings{
 		Executable: configured.LlamaServer, ModelFile: configured.ModelFile, Port: configured.Port,
@@ -199,14 +199,14 @@ func (app application) buildMetadata(graph parts) metadata.MetadataService {
 	batchSize := app.config.Advisor.BatchSize
 	credits := crediting.NewCreditService(advisor.NewCreditAdvisorCache(graph.chain, advice, graph.chain.Names()), batchSize)
 	tags := lastfm.NewLastFMCache(graph.tags, storage.NewBoltCache(graph.stores.bolt, app.clock, lastfm.CacheBucket))
-	genres := classification.NewGenreService(tags, advisor.NewGenreAdvisorCache(graph.chain, advice, graph.chain.Names()), graph.pool, batchSize)
-	return metadata.NewMetadataService(credits, genres)
+	genres := classification.NewGenreService(tags, advisor.NewGenreAdvisorCache(graph.chain, advice, graph.chain.Names(), app.config.Genres), graph.pool, app.config.Genres, batchSize)
+	return metadata.NewMetadataService(credits, genres, app.config.Genres)
 }
 
 func (app application) buildImportDefaults(graph parts) cli.ImportDefaults {
 	return cli.ImportDefaults{
 		Output: app.config.Output.Dir, Profile: graph.encoding.selector, Numbering: app.config.ParseNumbering(),
-		Layout: app.config.ParseLayout(), AlbumTemplate: app.config.Output.AlbumTemplate, Tags: app.request.Tags,
+		Layout: app.config.ParseLayout(), AlbumTemplate: app.config.Output.AlbumTemplate, Tags: app.request.Tags, Genres: app.config.Genres,
 	}
 }
 

@@ -21,7 +21,7 @@ func TestNewClassification(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			classification, err := NewClassification(testCase.details)
+			classification, err := NewDefaultPool().NewClassification(testCase.details)
 
 			if !errors.Is(err, testCase.expectedError) {
 				t.Fatalf("error = %v, want %v", err, testCase.expectedError)
@@ -79,7 +79,7 @@ func TestClassification_ApplyNationality(t *testing.T) {
 }
 
 func TestGenreNames_HasTwentyEntries(t *testing.T) {
-	names := GenreNames()
+	names := NewDefaultPool().ListNames()
 
 	if len(names) != 20 || names[0] != "Rock" || names[19] != "Pagode" {
 		t.Fatalf("names = %v", names)
@@ -88,13 +88,13 @@ func TestGenreNames_HasTwentyEntries(t *testing.T) {
 
 func TestSubgenresBelongToOneGenre(t *testing.T) {
 	owners := map[string]int{}
-	for _, definition := range genrePool {
-		for _, subgenre := range definition.subgenres {
+	for _, definition := range defaultDefinitions {
+		for _, subgenre := range definition.Subgenres {
 			owners[subgenre]++
 		}
 	}
 
-	subgenres := SubgenreNames()
+	subgenres := NewDefaultPool().ListSubgenreNames()
 
 	if len(subgenres) != 10 || len(owners) != len(subgenres) {
 		t.Fatalf("subgenres = %v owners = %v", subgenres, owners)
@@ -102,7 +102,7 @@ func TestSubgenresBelongToOneGenre(t *testing.T) {
 }
 
 func TestGenreHints(t *testing.T) {
-	hints := GenreHints()
+	hints := NewDefaultPool().ListHints()
 
 	if len(hints) != 2 || hints["Funk"] != "classic international funk" || hints["Fonk"] != "phonk, independent genre" {
 		t.Fatalf("hints = %v", hints)
@@ -111,7 +111,7 @@ func TestGenreHints(t *testing.T) {
 
 func mustClassification(t *testing.T, details ClassificationDetails) Classification {
 	t.Helper()
-	classification, err := NewClassification(details)
+	classification, err := NewDefaultPool().NewClassification(details)
 	if err != nil {
 		t.Fatalf("building classification %+v: %v", details, err)
 	}
@@ -119,7 +119,7 @@ func mustClassification(t *testing.T, details ClassificationDetails) Classificat
 }
 
 func TestNationalOnlyGenreNames(t *testing.T) {
-	names := NationalOnlyGenreNames()
+	names := NewDefaultPool().ListNationalOnlyNames()
 
 	if len(names) != 4 || names[0] != "Funk BR" || names[1] != "MPB" || names[2] != "Samba" || names[3] != "Pagode" {
 		t.Fatalf("names = %v", names)
@@ -127,10 +127,10 @@ func TestNationalOnlyGenreNames(t *testing.T) {
 }
 
 func TestGenreSubgenres(t *testing.T) {
-	subgenres := GenreSubgenres()
+	subgenres := NewDefaultPool().ListSubgenres()
 	subgenres["Rock"][0] = "changed"
 
-	fresh := GenreSubgenres()
+	fresh := NewDefaultPool().ListSubgenres()
 	if len(fresh) != 4 || len(fresh["Rock"]) != 2 || fresh["Rock"][0] != "Metal" || len(fresh["Funk BR"]) != 4 || len(fresh["Electronic"]) != 3 || len(fresh["Rap"]) != 1 {
 		t.Fatalf("subgenres = %v", fresh)
 	}
@@ -157,7 +157,7 @@ func TestParseGenre(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			classification, err := ParseGenre(testCase.value)
+			classification, err := NewDefaultPool().ParseGenre(testCase.value)
 
 			if !errors.Is(err, testCase.expectedError) {
 				t.Fatalf("err = %v, want %v", err, testCase.expectedError)

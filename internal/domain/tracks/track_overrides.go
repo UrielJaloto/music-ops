@@ -42,16 +42,21 @@ func NewTagOverrides(values map[string]string) (TagOverrides, error) {
 			return TagOverrides{}, fmt.Errorf("%w: %q", ErrTagValueMissing, key)
 		}
 	}
-	if overrides.Genre != "" {
-		classification, err := genres.ParseGenre(overrides.Genre)
-		if err != nil {
-			return TagOverrides{}, err
-		}
-		overrides.Genre = classification.Genre().String()
-	}
 	if overrides.Year != "" && !yearPattern.MatchString(overrides.Year) {
 		return TagOverrides{}, fmt.Errorf("%w: %q", ErrYearInvalid, overrides.Year)
 	}
+	return overrides, nil
+}
+
+func (overrides TagOverrides) CanonicalizeGenre(pool genres.Pool) (TagOverrides, error) {
+	if overrides.Genre == "" {
+		return overrides, nil
+	}
+	classification, err := pool.ParseGenre(overrides.Genre)
+	if err != nil {
+		return TagOverrides{}, err
+	}
+	overrides.Genre = classification.Genre().String()
 	return overrides, nil
 }
 

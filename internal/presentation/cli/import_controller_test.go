@@ -12,6 +12,7 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/domain/runs"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/discovery"
@@ -53,7 +54,7 @@ func (spy *finisherSpy) Finish(context.Context, importing.ImportOutput) error {
 }
 
 func testDefaults() ImportDefaults {
-	return ImportDefaults{Output: "E:/Music", Profile: fixedProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}", Tags: tracks.TagOverrides{Album: "Fixed", Genre: "Rock"}}
+	return ImportDefaults{Output: "E:/Music", Profile: fixedProfile(audio.EngineFDK), Numbering: albums.NumberingPerDirectory, Layout: filename.LayoutFlat, AlbumTemplate: "{album}", Tags: tracks.TagOverrides{Album: "Fixed", Genre: "rock"}, Genres: genres.NewDefaultPool()}
 }
 
 type reporterStub struct {
@@ -97,6 +98,33 @@ func TestImportController_Run_FolderFromArgument(t *testing.T) {
 	}
 	if code != 2 || fixture.finisher.calls != 1 || fixture.reporter.calls != 1 || !strings.Contains(fixture.output.String(), "Report: C:/Local/music-ops/runs/r1/report.md") {
 		t.Fatalf("code = %d finisher = %d output = %q", code, fixture.finisher.calls, fixture.output.String())
+	}
+}
+
+func TestImportController_GenreNotInPool_StopsBeforeTheRun(t *testing.T) {
+	cases := []struct {
+		name    string
+		execute func(ImportController) int
+	}{
+		{name: "Run", execute: func(controller ImportController) int { return controller.Run(context.Background(), []string{"D:/In"}) }},
+		{name: "Preview", execute: func(controller ImportController) int {
+			return controller.Preview(context.Background(), []string{"D:/In"})
+		}},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			fixture := controllerFixture{reporter: &reporterStub{}, service: &importServiceSpy{}, finisher: &finisherSpy{}, output: &bytes.Buffer{}}
+			defaults := testDefaults()
+			defaults.Tags.Genre = "Nu Metal"
+			presenter := NewImportPresenter(fixture.output, NewErrorPresenter(fixture.output))
+			controller := NewImportController(ImportServices{Importer: fixture.service, Previewer: fixture.service, Reporter: fixture.reporter}, fixture.finisher, presenter, ImportSettings{Defaults: defaults})
+
+			code := testCase.execute(controller)
+
+			if code != 1 || len(fixture.service.importInputs)+len(fixture.service.previewInputs) != 0 || !strings.HasPrefix(fixture.output.String(), "error: genre is not in the pool: \"Nu Metal\"; use one of: Rock, ") {
+				t.Fatalf("code = %d output = %q", code, fixture.output.String())
+			}
+		})
 	}
 }
 
@@ -289,7 +317,7 @@ func TestRenderProgressBar(t *testing.T) {
 	}
 	for _, testCase := range cases {
 		if bar := renderProgressBar(testCase.done, testCase.total); bar != testCase.expected {
-			t.Fatalf("renderProgressBar(%d, %d) = %s", testCase.done, testCase.total, bar)
+			t.Fatalf("progressBar(%d, %d) = %s", testCase.done, testCase.total, bar)
 		}
 	}
 }

@@ -132,9 +132,11 @@ func IsValidCreditSuggestion(request crediting.CreditRequest, suggestion crediti
 	return credits.NewCredit(title, artists).IsConsistentWith(request.Source)
 }
 
-func ValidGenreSuggestion(_ classification.GenreRequest, suggestion classification.GenreSuggestion) bool {
-	_, err := genres.NewClassification(genres.ClassificationDetails{
-		Genre: suggestion.Genre, Subgenre: suggestion.Subgenre, IsBrazilian: suggestion.IsBrazilian, IsKnown: suggestion.IsKnown,
-	})
-	return err == nil
+func NewGenreSuggestionValidator(catalog genres.Pool) GenreValidator {
+	return func(_ classification.GenreRequest, suggestion classification.GenreSuggestion) bool {
+		_, err := catalog.NewClassification(genres.ClassificationDetails{
+			Genre: suggestion.Genre, Subgenre: suggestion.Subgenre, IsBrazilian: suggestion.IsBrazilian, IsKnown: suggestion.IsKnown,
+		})
+		return err == nil
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
 	"github.com/UrielJaloto/music-ops/internal/domain/audio"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/domain/tracks"
 	"github.com/UrielJaloto/music-ops/internal/services/importing"
 )
@@ -45,6 +46,7 @@ type ImportDefaults struct {
 	Layout        filename.Layout
 	AlbumTemplate string
 	Tags          tracks.TagOverrides
+	Genres        genres.Pool
 }
 
 type ImportServices struct {
@@ -70,7 +72,11 @@ func NewImportController(importServices ImportServices, finisher RunFinisher, pr
 }
 
 func (controller ImportController) Run(ctx context.Context, arguments []string) int {
-	output, err := controller.services.Importer.Import(ctx, controller.buildImportInput(arguments))
+	input, err := controller.readImportInput(arguments)
+	if err != nil {
+		return controller.presenter.Failed(err)
+	}
+	output, err := controller.services.Importer.Import(ctx, input)
 	if err != nil {
 		return controller.presenter.Failed(err)
 	}
@@ -88,7 +94,11 @@ func (controller ImportController) report(ctx context.Context, output importing.
 }
 
 func (controller ImportController) Preview(ctx context.Context, arguments []string) int {
-	output, err := controller.services.Previewer.Preview(ctx, controller.buildImportInput(arguments))
+	input, err := controller.readImportInput(arguments)
+	if err != nil {
+		return controller.presenter.Failed(err)
+	}
+	output, err := controller.services.Previewer.Preview(ctx, input)
 	if err != nil {
 		return controller.presenter.Failed(err)
 	}
@@ -105,19 +115,26 @@ func (controller ImportController) finish(ctx context.Context, output importing.
 	}
 }
 
-func (controller ImportController) buildImportInput(arguments []string) importing.ImportInput {
-	input := buildImportInput(controller.settings.Defaults)
+func (controller ImportController) readImportInput(arguments []string) (importing.ImportInput, error) {
+	input, err := buildImportInput(controller.settings.Defaults)
+	if err != nil {
+		return importing.ImportInput{}, err
+	}
 	if len(arguments) > 0 {
 		input.Folder = arguments[0]
 	}
-	return input
+	return input, nil
 }
 
-func buildImportInput(defaults ImportDefaults) importing.ImportInput {
+func buildImportInput(defaults ImportDefaults) (importing.ImportInput, error) {
+	tags, err := defaults.Tags.CanonicalizeGenre(defaults.Genres)
+	if err != nil {
+		return importing.ImportInput{}, err
+	}
 	return importing.ImportInput{
 		Output: defaults.Output, Profile: defaults.Profile.SelectProfile(),
-		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate, Tags: defaults.Tags,
-	}
+		Numbering: defaults.Numbering, Layout: defaults.Layout, AlbumTemplate: defaults.AlbumTemplate, Tags: tags,
+	}, nil
 }
 
 type RunCommand struct {

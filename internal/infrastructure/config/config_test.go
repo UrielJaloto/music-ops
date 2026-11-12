@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/services/settings"
 )
 
@@ -57,8 +59,9 @@ func TestConfigStore_Load_Defaults(t *testing.T) {
 		Advisor:       AdvisorConfig{Port: 8089, BatchSize: 40},
 		NumberingMode: "per_directory",
 		Watch:         WatchConfig{Settle: 20 * time.Second},
+		Genres:        genres.NewDefaultPool(),
 	}
-	if err != nil || config != expected {
+	if err != nil || !reflect.DeepEqual(config, expected) {
 		t.Fatalf("config = %+v err = %v", config, err)
 	}
 	if config.ParseLayout() != filename.LayoutFlat || config.ParseNumbering() != albums.NumberingPerDirectory {
@@ -216,7 +219,7 @@ func TestConfigStore_SettingsStoreContract(t *testing.T) {
 	if err != nil || values["lastfm.api_key"] != "secret" || values["watch.inbox"] != "D:/Inbox" || values["advisor.port"] != "8089" {
 		t.Fatalf("values = %v err = %v", values, err)
 	}
-	if len(store.Keys()) != 16 || store.Keys()[0] != "output.dir" {
+	if len(store.Keys()) != 17 || store.Keys()[0] != "output.dir" {
 		t.Fatalf("keys = %v", store.Keys())
 	}
 }

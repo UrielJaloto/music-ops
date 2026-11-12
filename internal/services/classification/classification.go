@@ -59,11 +59,12 @@ type GenreService struct {
 	tags      GenreTagSource
 	advisor   GenreAdvisor
 	pool      GenreWorkPool
+	catalog   genres.Pool
 	batchSize int
 }
 
-func NewGenreService(tags GenreTagSource, advisor GenreAdvisor, pool GenreWorkPool, batchSize int) GenreService {
-	return GenreService{tags: tags, advisor: advisor, pool: pool, batchSize: batchSize}
+func NewGenreService(tags GenreTagSource, advisor GenreAdvisor, pool GenreWorkPool, catalog genres.Pool, batchSize int) GenreService {
+	return GenreService{tags: tags, advisor: advisor, pool: pool, catalog: catalog, batchSize: batchSize}
 }
 
 func (service GenreService) Classify(ctx context.Context, input ClassifyGenresInput) (ClassifiedGenres, error) {
@@ -175,7 +176,7 @@ func indexLookupsByKey(keys []tagKey, lookups []tagLookup) map[tagKey][]string {
 func findArtistsWithoutTrackTags(tracks []GenreTrack, found map[tagKey][]string) []tagKey {
 	var missing []GenreTrack
 	for _, track := range tracks {
-		if len(found[(buildTrackTagKey(track)).foldCase()]) == 0 {
+		if len(found[buildTrackTagKey(track).foldCase()]) == 0 {
 			missing = append(missing, track)
 		}
 	}
@@ -183,10 +184,10 @@ func findArtistsWithoutTrackTags(tracks []GenreTrack, found map[tagKey][]string)
 }
 
 func chooseTags(track GenreTrack, trackTags, artistTags map[tagKey][]string) []string {
-	if tags := trackTags[(buildTrackTagKey(track)).foldCase()]; len(tags) > 0 {
+	if tags := trackTags[buildTrackTagKey(track).foldCase()]; len(tags) > 0 {
 		return tags
 	}
-	return artistTags[(buildArtistTagKey(track)).foldCase()]
+	return artistTags[buildArtistTagKey(track).foldCase()]
 }
 
 func collectLookupWarnings(lookups []tagLookup) []string {
@@ -216,7 +217,7 @@ func (service GenreService) adviseGenres(ctx context.Context, tracks []GenreTrac
 
 func (service GenreService) classifyBatch(ctx context.Context, tracks []GenreTrack, evidence []genres.TagEvidence) ([]genres.Classification, []string) {
 	suggestions, batchErr := service.advisor.SuggestGenres(ctx, toGenreRequests(tracks, evidence))
-	batch := genreBatch{suggestions: suggestions, err: batchErr}
+	batch := genreBatch{catalog: service.catalog, suggestions: suggestions, err: batchErr}
 	classifications := make([]genres.Classification, 0, len(tracks))
 	warnings := []string{}
 	for index, track := range tracks {
@@ -242,27 +243,28 @@ func toGenreRequests(tracks []GenreTrack, evidence []genres.TagEvidence) []Genre
 }
 
 type genreBatch struct {
+	catalog     genres.Pool
 	suggestions []GenreSuggestion
 	err         error
 }
 
 func (batch genreBatch) chooseClassification(track GenreTrack, evidence genres.TagEvidence) (genres.Classification, string) {
-	classification, err := suggestedClassification(track, batch.suggestions, batch.err)
+	classification, err := batch.findSuggestedClassification(track)
 	if err == nil {
 		return classification, ""
 	}
-	return genres.ClassifyByTags(evidence), fmt.Sprintf("genre tag rules used for %s: %v", track.Path, err)
+	return batch.catalog.ClassifyByTags(evidence), fmt.Sprintf("genre tag rules used for %s: %v", track.Path, err)
 }
 
-func suggestedClassification(track GenreTrack, suggestions []GenreSuggestion, batchErr error) (genres.Classification, error) {
-	if batchErr != nil {
-		return genres.Classification{}, batchErr
+func (batch genreBatch) findSuggestedClassification(track GenreTrack) (genres.Classification, error) {
+	if batch.err != nil {
+		return genres.Classification{}, batch.err
 	}
-	for _, suggestion := range suggestions {
+	for _, suggestion := range batch.suggestions {
 		if suggestion.Key != string(track.ID) {
 			continue
 		}
-		return genres.NewClassification(genres.ClassificationDetails{
+		return batch.catalog.NewClassification(genres.ClassificationDetails{
 			Genre: suggestion.Genre, Subgenre: suggestion.Subgenre, IsBrazilian: suggestion.IsBrazilian, IsKnown: suggestion.IsKnown,
 		})
 	}

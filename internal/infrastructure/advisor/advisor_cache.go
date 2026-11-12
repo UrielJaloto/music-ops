@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/services/classification"
 	"github.com/UrielJaloto/music-ops/internal/services/crediting"
 )
@@ -33,7 +34,7 @@ type CreditAdvisorCache struct {
 }
 
 func NewCreditAdvisorCache(inner CreditSuggester, cache AdvisorCacheStore, advisorNames string) CreditAdvisorCache {
-	return CreditAdvisorCache{inner: inner, cache: cache, scope: "credit" + PromptFingerprint() + advisorNames}
+	return CreditAdvisorCache{inner: inner, cache: cache, scope: "credit" + FingerprintCreditPrompt() + advisorNames}
 }
 
 func (decorator CreditAdvisorCache) SuggestCredits(ctx context.Context, requests []crediting.CreditRequest) ([]crediting.CreditSuggestion, error) {
@@ -56,8 +57,8 @@ type GenreAdvisorCache struct {
 	scope string
 }
 
-func NewGenreAdvisorCache(inner GenreSuggester, cache AdvisorCacheStore, advisorNames string) GenreAdvisorCache {
-	return GenreAdvisorCache{inner: inner, cache: cache, scope: "genre" + PromptFingerprint() + advisorNames}
+func NewGenreAdvisorCache(inner GenreSuggester, cache AdvisorCacheStore, advisorNames string, catalog genres.Pool) GenreAdvisorCache {
+	return GenreAdvisorCache{inner: inner, cache: cache, scope: "genre" + FingerprintGenrePrompt(catalog) + advisorNames}
 }
 
 type genreIdentity struct {

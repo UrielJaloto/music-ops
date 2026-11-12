@@ -43,12 +43,12 @@ func (controller WatchController) Execute(ctx context.Context, arguments []strin
 	if inbox == "" {
 		return controller.presenter.Usage(usageWatch)
 	}
-	if err := controller.watcher.Watch(ctx, controller.watchInput(inbox)); err != nil {
+	input, err := buildImportInput(controller.defaults.Import)
+	if err != nil {
+		return controller.presenter.Failed(err)
+	}
+	if err := controller.watcher.Watch(ctx, watching.WatchInput{Inbox: inbox, QuietPeriod: controller.defaults.QuietPeriod, Import: input}); err != nil {
 		return controller.presenter.Failed(err)
 	}
 	return controller.presenter.Stopped()
-}
-
-func (controller WatchController) watchInput(inbox string) watching.WatchInput {
-	return watching.WatchInput{Inbox: inbox, QuietPeriod: controller.defaults.QuietPeriod, Import: buildImportInput(controller.defaults.Import)}
 }

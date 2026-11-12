@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/UrielJaloto/music-ops/internal/domain/genres"
@@ -119,7 +118,7 @@ func TestParseCommandLine_Flags(t *testing.T) {
 		{
 			name:      "TagsForEveryTrack",
 			arguments: []string{"run", "D:/In", "--tag", "album=Hybrid Theory", "--tag", "genre=rock; metal", "--tag", "year=2000"},
-			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{}, Tags: tracks.TagOverrides{Album: "Hybrid Theory", Genre: "Rock; Metal", Year: "2000"}},
+			expected:  RouterRequest{Command: "run", Arguments: []string{"D:/In"}, Overrides: map[string]string{}, Tags: tracks.TagOverrides{Album: "Hybrid Theory", Genre: "rock; metal", Year: "2000"}},
 		},
 		{
 			name:      "OutAndLayout",
@@ -172,7 +171,6 @@ func TestParseCommandLine_InvalidFlags(t *testing.T) {
 	cases := [][]string{
 		{"run", "--tag", "artist=X"},
 		{"run", "--tag", "year=99"},
-		{"run", "--tag", "genre=Nu Metal"},
 		{"run", "--tag", "album"},
 		{"run", "--set", "no-divider"},
 		{"run", "--set", "=value"},
@@ -210,8 +208,10 @@ func TestErrorPresenter_Present(t *testing.T) {
 		{err: tracks.ErrTagValueMissing, expectedMessage: "a tag value is empty", expectedCode: 1},
 		{err: tracks.ErrYearInvalid, expectedMessage: "the year must have four digits", expectedCode: 1},
 		{err: genres.ErrGenreFormatInvalid, expectedMessage: `the genre must be "Genre" or "Genre; Subgenre"`, expectedCode: 1},
-		{err: genres.ErrGenreNotInPool, expectedMessage: "unknown genre; use one of: " + strings.Join(genres.GenreNames(), ", "), expectedCode: 1},
-		{err: genres.ErrSubgenreNotInGenre, expectedMessage: "unknown sub-genre for that genre; sub-genres: Rock (Metal, Punk), Rap (Rap Acústico), Electronic (Dance, House, Ambient), Funk BR (Funk Carioca, Melódico, Remix, Afrobeats)", expectedCode: 1},
+		{err: fmt.Errorf("%w: %q; use one of: Rock", genres.ErrGenreNotInPool, "Pop"), expectedMessage: "genre is not in the pool: \"Pop\"; use one of: Rock", expectedCode: 1},
+		{err: fmt.Errorf("checking the genres file: %w", genres.ErrGenrePoolEmpty), expectedMessage: "checking the genres file: genre pool is empty", expectedCode: 1},
+		{err: genres.ErrGenreDefinitionInvalid, expectedMessage: "genre definition is invalid", expectedCode: 1},
+		{err: genres.ErrSubgenreNotInGenre, expectedMessage: "subgenre does not belong to the genre", expectedCode: 1},
 		{err: fmt.Errorf("opening library: %w", importing.ErrRunInProgress), expectedMessage: "another music-ops run is in progress", expectedCode: 1},
 		{err: errors.New("disk on fire"), expectedMessage: "music-ops failed: disk on fire", expectedCode: 1},
 	}

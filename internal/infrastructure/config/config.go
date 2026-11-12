@@ -17,6 +17,7 @@ import (
 
 	"github.com/UrielJaloto/music-ops/internal/domain/albums"
 	"github.com/UrielJaloto/music-ops/internal/domain/filename"
+	"github.com/UrielJaloto/music-ops/internal/domain/genres"
 	"github.com/UrielJaloto/music-ops/internal/services/settings"
 	"gopkg.in/yaml.v3"
 )
@@ -54,6 +55,7 @@ var defaultValues = map[string]string{
 	"advisor.llama_server": "", "advisor.model_file": "", "advisor.port": defaultAdvisorPort, "advisor.batch_size": defaultBatchSize,
 	"numbering.mode": numberingPerDir,
 	"watch.inbox":    "", "watch.settle": defaultWatchSettle,
+	"genres.file": "",
 }
 
 var configKeys = []string{
@@ -63,6 +65,7 @@ var configKeys = []string{
 	"advisor.llama_server", "advisor.model_file", "advisor.port", "advisor.batch_size",
 	"numbering.mode",
 	"watch.inbox", "watch.settle",
+	"genres.file",
 }
 
 var configValidators = map[string]func(string) error{
@@ -111,6 +114,7 @@ type Config struct {
 	Advisor       AdvisorConfig
 	NumberingMode string
 	Watch         WatchConfig
+	Genres        genres.Pool
 }
 
 func (config Config) ParseLayout() filename.Layout {
@@ -188,6 +192,10 @@ func (store ConfigStore) Load(ctx context.Context, overrides map[string]string) 
 	}
 	if config.Output.Dir == "" {
 		config.Output.Dir = store.musicDir
+	}
+	config.Genres, err = loadGenrePool(values["genres.file"])
+	if err != nil {
+		return Config{}, err
 	}
 	return config, nil
 }

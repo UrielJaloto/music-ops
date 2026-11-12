@@ -9,10 +9,10 @@ func FuzzClassificationGenre(f *testing.F) {
 	f.Add(uint8(0), uint8(0), false, false)
 	allowed := derivableGenres()
 	f.Fuzz(func(t *testing.T, genreIndex, subgenreIndex uint8, isBrazilian, isKnown bool) {
-		definition := genrePool[int(genreIndex)%len(genrePool)]
-		details := ClassificationDetails{Genre: definition.name, Subgenre: subgenreAt(definition, subgenreIndex), IsBrazilian: isBrazilian, IsKnown: isKnown}
+		definition := defaultDefinitions[int(genreIndex)%len(defaultDefinitions)]
+		details := ClassificationDetails{Genre: definition.Name, Subgenre: subgenreAt(definition, subgenreIndex), IsBrazilian: isBrazilian, IsKnown: isKnown}
 
-		classification, err := NewClassification(details)
+		classification, err := NewDefaultPool().NewClassification(details)
 		if err != nil {
 			t.Fatalf("pool classification rejected: %+v %v", details, err)
 		}
@@ -23,17 +23,17 @@ func FuzzClassificationGenre(f *testing.F) {
 	})
 }
 
-func subgenreAt(definition genreDefinition, index uint8) string {
-	choices := append([]string{""}, definition.subgenres...)
+func subgenreAt(definition GenreDefinition, index uint8) string {
+	choices := append([]string{""}, definition.Subgenres...)
 	return choices[int(index)%len(choices)]
 }
 
 func derivableGenres() map[string]bool {
 	allowed := map[string]bool{unknownGenreValue: true}
-	for _, definition := range genrePool {
-		for _, subgenre := range append([]string{""}, definition.subgenres...) {
-			allowed[joinGenreParts(definition.name, subgenre)] = true
-			allowed[joinGenreParts(appendNationalSuffix(definition.name), appendNationalSuffix(subgenre))] = true
+	for _, definition := range defaultDefinitions {
+		for _, subgenre := range append([]string{""}, definition.Subgenres...) {
+			allowed[joinGenreParts(definition.Name, subgenre)] = true
+			allowed[joinGenreParts(appendNationalSuffix(definition.Name), appendNationalSuffix(subgenre))] = true
 		}
 	}
 	return allowed

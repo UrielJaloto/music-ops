@@ -52,10 +52,11 @@ type ResolvedMetadata struct {
 type MetadataService struct {
 	credits CreditNormalizer
 	genres  GenreClassifier
+	catalog genres.Pool
 }
 
-func NewMetadataService(credits CreditNormalizer, genres GenreClassifier) MetadataService {
-	return MetadataService{credits: credits, genres: genres}
+func NewMetadataService(credits CreditNormalizer, genres GenreClassifier, catalog genres.Pool) MetadataService {
+	return MetadataService{credits: credits, genres: genres, catalog: catalog}
 }
 
 func (service MetadataService) Resolve(ctx context.Context, input ResolveMetadataInput) (ResolvedMetadata, error) {
@@ -83,7 +84,7 @@ func (service MetadataService) classify(ctx context.Context, genreTracks []class
 		}
 		return classified, nil
 	}
-	fixed, err := genres.ParseGenre(fixedGenre)
+	fixed, err := service.catalog.ParseGenre(fixedGenre)
 	if err != nil {
 		return classification.ClassifiedGenres{}, err
 	}
